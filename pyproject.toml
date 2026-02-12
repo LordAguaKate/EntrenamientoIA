@@ -1,0 +1,32 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "entrenamientoia"
+version = "0.0.1"
+description = "Prediccion con imagenes"
+authors = [
+  { name = "LordAguaKate" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+requires-python = ">=3.10.0"
+
+
+[tool.ruff]
+line-length = 99
+src = ["entrenamientoia"]
+include = ["pyproject.toml", "entrenamientoia/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["entrenamientoia"]
+force-sort-within-sections = true
+
