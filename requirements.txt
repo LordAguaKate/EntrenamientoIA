@@ -124,6 +124,7 @@ rpds-py==0.30.0
 ruff==0.14.13
 scikit-learn==1.8.0
 scipy==1.17.0
+seaborn==0.13.2
 Send2Trash==2.1.0
 setuptools==80.10.1
 shellingham==1.5.4
