@@ -1,5 +1,7 @@
 # Data
 /data/
+/tests/imagenes_originales
+/tests/waste_classification
 
 # Mac OS-specific storage files
 .DS_Store
