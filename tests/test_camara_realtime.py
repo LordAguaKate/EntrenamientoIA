@@ -22,7 +22,7 @@ except ImportError:
 
 # --- CONFIGURACIÓN ---
 BASE_DIR = Path(__file__).resolve().parent.parent 
-MODEL_PATH = BASE_DIR / "models" / "modelo_residuos_rpi.tflite"
+MODEL_PATH = BASE_DIR / "models" / "MobileNetV2" / "modelo_residuos_rpi.tflite"
 CONFIDENCE_THRESHOLD = 0.50
 
 CLASSES = [

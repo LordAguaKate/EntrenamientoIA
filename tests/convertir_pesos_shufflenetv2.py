@@ -6,8 +6,8 @@ a un archivo .npz con el formato de tensores que espera Keras.
     Keras no incluye ShuffleNetV2 en keras.applications, así que no hay forma
     de pedir weights='imagenet' como con MobileNetV3 o EfficientNetB0.
     La fuente oficial de pesos preentrenados es torchvision. Este script los
-    descarga UNA sola vez y los deja en models/pretrained/ para que el notebook
-    clasificacion_ShuffleNetV2_preentrenado.ipynb los cargue solo con numpy.
+    descarga UNA sola vez y los deja en models/ShuffleNetV2/pretrained/ para que el notebook
+    ShuffleNetV2/entrenamiento_ShuffleNetV2_imagenet.ipynb los cargue solo con numpy.
 
 Solo hace falta correrlo si el .npz no existe. Requiere torch y torchvision,
 que NO están en requirements.txt a propósito: instalarlos en el venv del
@@ -20,7 +20,7 @@ aislado con uv (desde la raíz del repo):
         tests/convertir_pesos_shufflenetv2.py
 
 Salida:
-    models/pretrained/shufflenet_v2_x1_0_imagenet.npz
+    models/ShuffleNetV2/pretrained/shufflenet_v2_x1_0_imagenet.npz
 """
 
 import argparse
@@ -31,7 +31,7 @@ import torch
 from torchvision.models import ShuffleNet_V2_X1_0_Weights, shufflenet_v2_x1_0
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SALIDA_DEFAULT = BASE_DIR / "models" / "pretrained" / "shufflenet_v2_x1_0_imagenet.npz"
+SALIDA_DEFAULT = BASE_DIR / "models" / "ShuffleNetV2" / "pretrained" / "shufflenet_v2_x1_0_imagenet.npz"
 
 # Normalización con la que torchvision entrenó el modelo en ImageNet
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)

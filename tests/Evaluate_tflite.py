@@ -24,11 +24,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "models"
 DATA_DIR = BASE_DIR / "data" / "raw" / "waste_classification" / "test"
 
-TFLITE_MODEL_PATH = MODELS_DIR / "modelo_residuos_rpi_V3_05.tflite"
+TFLITE_MODEL_PATH = MODELS_DIR / "MobileNetV3" / "modelo_residuos_rpi_V3_05.tflite"
 IMG_SIZE = (224, 224)
 
 # Valores de referencia del modelo .keras ya evaluado en
-# evaluacion_modelo_MobileNetV3.ipynb, para poder imprimir la comparación
+# evaluacion_MobileNetV3Large.ipynb, para poder imprimir la comparación
 # antes/después sin tener que volver a correr ese notebook.
 REFERENCE_KERAS_ACCURACY = 0.9652  # 96.52%
 REFERENCE_KERAS_LOSS = 0.1284
@@ -37,7 +37,7 @@ REFERENCE_TFLITE_SIZE_MB = 3.24
 
 
 def cargar_test_set():
-    """Genera el set de prueba en el mismo orden que evaluacion_modelo_MobileNetV3.ipynb."""
+    """Genera el set de prueba en el mismo orden que evaluacion_MobileNetV3Large.ipynb."""
     if not DATA_DIR.exists():
         raise FileNotFoundError(f"No se encontraron los datos en: {DATA_DIR}")
 
@@ -95,7 +95,7 @@ def main():
     if not TFLITE_MODEL_PATH.exists():
         raise FileNotFoundError(
             f"No se encontró el modelo en: {TFLITE_MODEL_PATH}. "
-            "Verifica que hayas corrido la conversión en clasificacion_3.0.ipynb."
+            "Verifica que hayas corrido la conversión en entrenamiento_MobileNetV3Large.ipynb."
         )
 
     print(f"Cargando test set desde: {DATA_DIR}")

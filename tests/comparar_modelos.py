@@ -4,10 +4,10 @@ directamente desde los archivos .ipynb ya ejecutados, sin volver a cargar
 ni correr inferencias sobre ningún modelo.
 
 Notebooks leídos:
-    - evaluacion_modelo_MobileNetV3.ipynb
-    - evaluacion_modelo_EfficientNetB0.ipynb
-    - evaluacion_modelo_ShuffleNetV2.ipynb               (entrenado desde cero)
-    - evaluacion_modelo_ShuffleNetV2_preentrenado.ipynb  (pesos de ImageNet)
+    - MobileNetV3/evaluacion_MobileNetV3Large.ipynb
+    - EfficientNetB0/evaluacion_EfficientNetB0.ipynb
+    - ShuffleNetV2/evaluacion_modelo_ShuffleNetV2.ipynb  (entrenado desde cero)
+    - ShuffleNetV2/evaluacion_ShuffleNetV2_imagenet.ipynb (pesos de ImageNet)
 
 El script busca en los outputs de cada notebook:
     - Accuracy y Loss  (celda de model.evaluate)
@@ -48,29 +48,29 @@ MODELS_DIR = BASE_DIR / "models"
 MODELOS = [
     {
         "nombre": "MobileNetV3-Large",
-        "notebook": NOTEBOOKS_DIR / "evaluacion_modelo_MobileNetV3.ipynb",
-        "keras": MODELS_DIR / "modelo_residuos_rpi_V3_05.keras",
-        "tflite": MODELS_DIR / "modelo_residuos_rpi_V3_05.tflite",
+        "notebook": NOTEBOOKS_DIR / "MobileNetV3" / "evaluacion_MobileNetV3Large.ipynb",
+        "keras": MODELS_DIR / "MobileNetV3" / "modelo_residuos_rpi_V3_05.keras",
+        "tflite": MODELS_DIR / "MobileNetV3" / "modelo_residuos_rpi_V3_05.tflite",
     },
     {
         "nombre": "EfficientNetB0",
-        "notebook": NOTEBOOKS_DIR / "evaluacion_modelo_EfficientNetB0.ipynb",
-        "keras": MODELS_DIR / "modelo_residuos_EfficientNetB0_v1.keras",
-        "tflite": MODELS_DIR / "modelo_residuos_EfficientNetB0_v1.tflite",
+        "notebook": NOTEBOOKS_DIR / "EfficientNetB0" / "evaluacion_EfficientNetB0.ipynb",
+        "keras": MODELS_DIR / "EfficientNetB0" / "modelo_residuos_EfficientNetB0_v1.keras",
+        "tflite": MODELS_DIR / "EfficientNetB0" / "modelo_residuos_EfficientNetB0_v1.tflite",
     },
     {
         # Entrenado desde cero, sin pesos de ImageNet
         "nombre": "ShuffleNetV2 (desde cero)",
-        "notebook": NOTEBOOKS_DIR / "evaluacion_modelo_ShuffleNetV2.ipynb",
-        "keras": MODELS_DIR / "modelo_residuos_shufflenetV2_nativo.keras",
-        "tflite": MODELS_DIR / "modelo_residuos_shufflenetV2_nativo.tflite",
+        "notebook": NOTEBOOKS_DIR / "ShuffleNetV2" / "evaluacion_modelo_ShuffleNetV2.ipynb",
+        "keras": MODELS_DIR / "ShuffleNetV2" / "modelo_residuos_shufflenetV2_nativo.keras",
+        "tflite": MODELS_DIR / "ShuffleNetV2" / "modelo_residuos_shufflenetV2_nativo.tflite",
     },
     {
         # Con pesos de ImageNet y el mismo protocolo de dos fases que los otros modelos
         "nombre": "ShuffleNetV2 (ImageNet)",
-        "notebook": NOTEBOOKS_DIR / "evaluacion_modelo_ShuffleNetV2_preentrenado.ipynb",
-        "keras": MODELS_DIR / "modelo_residuos_shufflenetV2_imagenet.keras",
-        "tflite": MODELS_DIR / "modelo_residuos_shufflenetV2_imagenet.tflite",
+        "notebook": NOTEBOOKS_DIR / "ShuffleNetV2" / "evaluacion_ShuffleNetV2_imagenet.ipynb",
+        "keras": MODELS_DIR / "ShuffleNetV2" / "modelo_residuos_shufflenetV2_imagenet.keras",
+        "tflite": MODELS_DIR / "ShuffleNetV2" / "modelo_residuos_shufflenetV2_imagenet.tflite",
     },
 ]
 

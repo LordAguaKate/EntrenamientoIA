@@ -26,11 +26,16 @@ El proyecto sigue el estándar *Cookiecutter Data Science*:
 ├── data/
 │   ├── raw/                 # Datos originales (descargados automáticamente)
 │   └── processed/           # Datos transformados 
-├── models/                  # Aquí se guardan los modelos entrenados
-│   ├── modelo_residuos_rpi.keras   # Modelo maestro (entrenamiento)
-│   └── modelo_residuos_rpi.tflite  # Modelo optimizado (Raspberry Pi)
+├── models/                  # Modelos entrenados (.keras = maestro, .tflite = Raspberry Pi)
+│   ├── MobileNetV2/         # modelo_residuos_rpi*, más filtrado_ordenamiento/
+│   ├── MobileNetV3/         # modelo_residuos_rpi_V3_*
+│   ├── EfficientNetB0/      # modelo_residuos_EfficientNetB0_v1
+│   └── ShuffleNetV2/        # modelo_residuos_shufflenetV2_imagenet + pretrained/
 ├── notebooks/
-│   └── clasificacion_mejorada.ipynb # Notebook Principal
+│   ├── MobileNetV2/         # Entrenamiento (30 y 5 clases) y filtrado_ordenamiento/
+│   ├── MobileNetV3/         # Entrenamiento y evaluación de MobileNetV3-Large
+│   ├── EfficientNetB0/      # Entrenamiento y evaluación de EfficientNetB0
+│   └── ShuffleNetV2/        # Entrenamiento y evaluación de ShuffleNetV2 (ImageNet)
 ├── entrenamientoia/         # Código fuente y scripts auxiliares
 ├── requirements.txt         # Dependencias del proyecto
 ├── Makefile                 # Comandos de automatización (Linux/Mac)
@@ -85,11 +90,11 @@ Todo el flujo de entrenamiento reside en el notebook principal.
 jupyter notebook
 ```
 
-2. Abre el archivo: notebooks/clasificacion_mejorada.ipynb.
+2. Abre el notebook de entrenamiento del modelo que quieras, por ejemplo: notebooks/MobileNetV2/entrenamiento_MobileNetV2_30clases.ipynb.
 
 3. Ejecuta las celdas en orden acendente.
 
-**Resultado:** Al finalizar, encontrarás los archivos .keras y .tflite en la carpeta models/.
+**Resultado:** Al finalizar, encontrarás los archivos .keras y .tflite en la subcarpeta de su modelo dentro de models/ (por ejemplo, models/MobileNetV2/).
 
 
 
@@ -97,7 +102,7 @@ jupyter notebook
 
 Para llevar este modelo al mundo físico:
 
-1. Transferencia: Copia el archivo models/modelo_residuos_rpi.tflite a tu Raspberry Pi.
+1. Transferencia: Copia el archivo models/MobileNetV2/modelo_residuos_rpi.tflite a tu Raspberry Pi.
 
 2. Entorno en la Pi: No necesitas instalar TensorFlow completo (es muy pesado). Usa el runtime ligero:
 

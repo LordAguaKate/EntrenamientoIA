@@ -77,32 +77,32 @@ def channel_shuffle(x):
 MODELOS = [
     {
         "nombre": "MobileNetV3-Large",
-        "keras": MODELS_DIR / "modelo_residuos_rpi_V3_05.keras",
-        "tflite": MODELS_DIR / "modelo_residuos_rpi_V3_05.tflite",
+        "keras": MODELS_DIR / "MobileNetV3" / "modelo_residuos_rpi_V3_05.keras",
+        "tflite": MODELS_DIR / "MobileNetV3" / "modelo_residuos_rpi_V3_05.tflite",
         "custom_objects": {},
     },
     {
         "nombre": "EfficientNetB0",
-        "keras": MODELS_DIR / "modelo_residuos_EfficientNetB0_v1.keras",
-        "tflite": MODELS_DIR / "modelo_residuos_EfficientNetB0_v1.tflite",
+        "keras": MODELS_DIR / "EfficientNetB0" / "modelo_residuos_EfficientNetB0_v1.keras",
+        "tflite": MODELS_DIR / "EfficientNetB0" / "modelo_residuos_EfficientNetB0_v1.tflite",
         "custom_objects": {},
     },
     {
         # Entrenado desde cero (ShuffleNetV2.ipynb), sin pesos de ImageNet.
         # Se conserva como referencia de cuánto aporta el transfer learning.
         "nombre": "ShuffleNetV2 (desde cero)",
-        "keras": MODELS_DIR / "modelo_residuos_shufflenetV2_nativo.keras",
-        "tflite": MODELS_DIR / "modelo_residuos_shufflenetV2_nativo.tflite",
+        "keras": MODELS_DIR / "ShuffleNetV2" / "modelo_residuos_shufflenetV2_nativo.keras",
+        "tflite": MODELS_DIR / "ShuffleNetV2" / "modelo_residuos_shufflenetV2_nativo.tflite",
         # Registramos la función personalizada para que Keras reconstruya el modelo
         "custom_objects": {"channel_shuffle": channel_shuffle},
     },
     {
         # Con pesos de ImageNet y el mismo protocolo de dos fases que los otros
-        # modelos (clasificacion_ShuffleNetV2_preentrenado.ipynb).
+        # modelos (ShuffleNetV2/entrenamiento_ShuffleNetV2_imagenet.ipynb).
         # No usa capas Lambda, así que no necesita custom_objects.
         "nombre": "ShuffleNetV2 (ImageNet)",
-        "keras": MODELS_DIR / "modelo_residuos_shufflenetV2_imagenet.keras",
-        "tflite": MODELS_DIR / "modelo_residuos_shufflenetV2_imagenet.tflite",
+        "keras": MODELS_DIR / "ShuffleNetV2" / "modelo_residuos_shufflenetV2_imagenet.keras",
+        "tflite": MODELS_DIR / "ShuffleNetV2" / "modelo_residuos_shufflenetV2_imagenet.tflite",
         "custom_objects": {},
     },
 ]
