@@ -1,0 +1,12 @@
+# Dependencias aisladas del notebook YOLO (Linux + NVIDIA CUDA 12.8).
+# Instalar en el entorno .venv-yolo, no en el entorno principal de TensorFlow.
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+torch==2.11.0+cu128
+torchvision==0.26.0+cu128
+ultralytics==8.4.178
+pandas
+matplotlib
+seaborn
+scikit-learn
+ipykernel
