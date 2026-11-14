@@ -16,7 +16,7 @@ Modelos comparados:
 Los modelos cuyo archivo .keras no exista todavía se omiten.
 
 Uso (desde la raíz del repo):
-    python tests/comparar_modelos_inferencia.py
+    python pruebas_modelos/local/comparar_modelos_inferencia.py
 
 Requiere: tensorflow, numpy, scikit-learn, tabulate
     pip install tabulate   (opcional, para mejor formato)
@@ -43,8 +43,8 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # CONFIGURACIÓN DE RUTAS
 # ---------------------------------------------------------------------------
-# Asume que este archivo vive en tests/, igual que Evaluate_tflite.py
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Asume que este archivo vive en pruebas_modelos/local/ (dos niveles bajo la raíz).
+BASE_DIR = Path(__file__).resolve().parents[2]
 MODELS_DIR = BASE_DIR / "models"
 DATA_DIR = BASE_DIR / "data" / "raw" / "waste_classification" / "test"
 

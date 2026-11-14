@@ -1,0 +1,26 @@
+{
+  "ejemplos": [
+    "carton/Cardboard_156.jpg",
+    "carton/Cardboard_73.jpg",
+    "carton/cardboard_953.jpg",
+    "carton/carddboard403 (472).jpg",
+    "carton/carddboard403 (599).jpg",
+    "otros/MD_W (542).jpg",
+    "plastico/20260606_015647_no_reciclable_nivia_analiese_gonzalez_20210996.jpeg",
+    "plastico/plastic_1063.jpg",
+    "plastico/plastic_424.jpg",
+    "vidrio/glass132.jpg"
+  ],
+  "casos_dificiles": [
+    "vidrio/g0012.jpg",
+    "vidrio/g0029.jpg",
+    "vidrio/glass_1032.jpg",
+    "vidrio/glass_1046.jpg",
+    "vidrio/glass_1338.jpg",
+    "carton/cardboard_1220.jpg",
+    "aluminio/metal waste (6).jpg",
+    "plastico/plastic_1381.jpg",
+    "otros/trash_308.jpg",
+    "otros/trash_38.jpg"
+  ]
+}

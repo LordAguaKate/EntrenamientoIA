@@ -6,7 +6,7 @@ Usa WeasyPrint y Markdown, que NO están en requirements.txt; se corre en un
 entorno aislado con uv para no tocar el venv del proyecto (desde la raíz del repo):
 
     uv run --no-project --python 3.12 --with weasyprint --with markdown \
-        tests/generar_pdf_reporte.py
+        pruebas_modelos/reportes/generar_pdf_reporte.py
 
 Vuelve a correrlo cada vez que edites el .md. Para otro reporte (por ejemplo, el
 de la Raspberry Pi 4) se pasan --md, --salida y --datos; la placa y la fecha se
@@ -20,7 +20,7 @@ from pathlib import Path
 import markdown
 from weasyprint import HTML
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[2]
 ap = argparse.ArgumentParser(description="Convierte un reporte de benchmark en Markdown a PDF")
 ap.add_argument("--md", type=Path, default=REPO / "docs" / "reporte_benchmark_modelos.md")
 ap.add_argument("--salida", type=Path, default=REPO / "docs" / "reporte_benchmark_modelos.pdf")
@@ -70,19 +70,26 @@ entradas = re.findall(r'<h2 [^>]*id="([^"]+)"[^>]*>(.*?)</h2>', html)
 indice = "".join(f'<li><a href="#{i}">{re.sub("<[^>]+>", "", t)}</a></li>' for i, t in entradas)
 
 # Portada con las cifras clave
-COLOR = {"mobilenet": "#2a78d6", "efficientnet": "#eb6834", "shufflenet": "#1baf7a"}
-tarjetas = ""
+COLOR = {"mobilenet": "#2a78d6", "efficientnet": "#eb6834", "shufflenet": "#1baf7a",
+         "squeezenet": "#eda100", "yolo": "#e87ba4"}  # mismos colores que pruebas_modelos/reportes/graficar_benchmark_rpi.py
+tarjetas = []
 for m in DATOS["modelos"]:
     c = m["clasificacion"]
     rec = ' <span class="sello">Recomendado</span>' if m["clave"] == args.recomendado else ""
-    tarjetas += f'''
+    tarjetas.append(f'''
     <div class="tarjeta" style="border-top-color:{COLOR[m["clave"]]}">
       <div class="t-nombre">{m["nombre"]}{rec}</div>
       <div class="t-fila"><span>Accuracy</span><b>{c["accuracy"] * 100:.2f}%</b></div>
       <div class="t-fila"><span>Latencia media</span><b>{m["latencia_ms"]["media"]:.2f} ms</b></div>
       <div class="t-fila"><span>Cuadros/s</span><b>{m["cuadros_por_segundo"]:.1f}</b></div>
       <div class="t-fila"><span>Archivo .tflite</span><b>{m["tam_tflite_mb"]:.2f} MB</b></div>
-    </div>'''
+    </div>''')
+# Hasta 3 modelos caben en una fila; con más, filas de 3 (WeasyPrint no reparte bien flex-wrap)
+if len(tarjetas) <= 3:
+    filas_tarjetas = f'<div class="p-tarjetas">{"".join(tarjetas)}</div>'
+else:
+    filas_tarjetas = "".join(f'<div class="p-tarjetas muchas">{"".join(tarjetas[i:i + 3])}</div>'
+                             for i in range(0, len(tarjetas), 3))
 
 portada = f'''
 <section class="portada">
@@ -95,7 +102,7 @@ portada = f'''
     <div><span>Conjunto de prueba</span>{DATOS["imagenes"]["total"]:,} imágenes · 5 clases</div>
     <div><span>Fecha de las pruebas</span>{FECHA}</div>
   </div>
-  <div class="p-tarjetas">{tarjetas}</div>
+  {filas_tarjetas}
   <div class="p-nota">Cifras medidas en la {DISPOSITIVO} con modelos .tflite cuantizados, 1 hilo de inferencia (runtime {DATOS["runtime"]}).</div>
 </section>
 <section class="indice">
@@ -104,13 +111,16 @@ portada = f'''
 </section>
 '''
 
+# Pie de página: la placa y los modelos (sin la etiqueta de los pesos, para que quepa)
+PIE_MODELOS = " · ".join([DISPOSITIVO] + [re.sub(r"\s*\(ImageNet\)", "", m["nombre"]) for m in DATOS["modelos"]])
+
 CSS = '''
 @page {
   size: letter; margin: 22mm 18mm 20mm 18mm;
   @top-left { content: "EcoSort · Reporte de pruebas de modelos"; font: 8pt "Noto Sans"; color: #898781; }
   @top-right { content: string(seccion); font: 8pt "Noto Sans"; color: #898781; }
   @bottom-right { content: counter(page) " / " counter(pages); font: 8pt "Noto Sans"; color: #898781; }
-  @bottom-left { content: "DISPOSITIVO · MobileNetV3-Large · EfficientNetB0 · ShuffleNetV2"; font: 8pt "Noto Sans"; color: #b8b7b0; }
+  @bottom-left { content: "PIE_MODELOS"; font: 8pt "Noto Sans"; color: #b8b7b0; }
 }
 @page :first { margin: 0; @top-left { content: none } @top-right { content: none } @bottom-right { content: none } @bottom-left { content: none } }
 html { font-family: "Noto Sans", "DejaVu Sans", sans-serif; font-size: 9.6pt; line-height: 1.5; color: #1d1d1b; }
@@ -129,6 +139,11 @@ strong { color: #0b0b0b; }
 .p-meta div { display: flex; flex-direction: column; }
 .p-meta span { font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; color: #9ec5f4; margin-bottom: 1mm; }
 .p-tarjetas { display: flex; gap: 5mm; margin-top: 22mm; }
+/* Con más de 3 modelos las tarjetas van en filas de 3, todas del mismo ancho */
+.p-tarjetas.muchas { margin-top: 5mm; }
+.p-tarjetas.muchas:first-of-type { margin-top: 14mm; }
+.p-tarjetas.muchas .tarjeta { flex: 0 0 44.5mm; width: 44.5mm; padding: 4mm 4.5mm 3mm; }  /* 53.5 mm con el padding */
+.p-tarjetas.muchas .t-nombre { min-height: 9mm; }
 .tarjeta { flex: 1; background: #fcfcfb; color: #1d1d1b; border-radius: 3mm; border-top: 2.2mm solid; padding: 5mm 5mm 4mm; }
 .t-nombre { font-weight: 700; font-size: 10.5pt; margin-bottom: 3mm; min-height: 11mm; }
 .t-fila { display: flex; justify-content: space-between; font-size: 9pt; padding: 1.3mm 0; border-bottom: 1px solid #ecebe6; }
@@ -151,7 +166,7 @@ h2 { string-set: seccion content(); break-before: page; font-size: 17pt; color: 
 h2.sin-num { break-before: auto; }
 h3 { font-size: 12pt; color: #184f95; margin: 7mm 0 2.5mm; break-after: avoid; }
 p { margin: 0 0 2.6mm; text-align: justify; hyphens: auto; }
-p:has(+ table), p:has(+ pre) { break-after: avoid; }
+p:has(+ table), p:has(+ pre), p:has(+ blockquote) { break-after: avoid; }
 ul, ol { margin: 0 0 3mm; padding-left: 5.5mm; }
 li { margin-bottom: 1.4mm; }
 
@@ -188,6 +203,6 @@ figcaption::before { content: "Figura " counter(figura) ". "; font-weight: 700; 
 '''
 
 documento = f'''<!doctype html><html lang="es"><head><meta charset="utf-8"><title>{titulo}</title>
-<style>{CSS.replace("DISPOSITIVO", DISPOSITIVO)}</style></head><body>{portada}{html}</body></html>'''
+<style>{CSS.replace("PIE_MODELOS", PIE_MODELOS)}</style></head><body>{portada}{html}</body></html>'''
 HTML(string=documento, base_url=str(MD.parent) + "/").write_pdf(SALIDA)
 print(SALIDA, f"{SALIDA.stat().st_size / 2**20:.1f} MB")

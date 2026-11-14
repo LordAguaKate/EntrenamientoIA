@@ -21,7 +21,7 @@ except ImportError:
         sys.exit(1)
 
 # --- CONFIGURACIÓN ---
-BASE_DIR = Path(__file__).resolve().parent.parent 
+BASE_DIR = Path(__file__).resolve().parents[2] 
 MODEL_PATH = BASE_DIR / "models" / "MobileNetV2" / "modelo_residuos_rpi.tflite"
 CONFIDENCE_THRESHOLD = 0.50
 

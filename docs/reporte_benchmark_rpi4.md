@@ -56,7 +56,7 @@ Fecha de las pruebas: 14 de octubre de 2026.
 
 ## 3. Resultados en la Raspberry Pi 4
 
-Corrida oficial: `tests/benchmark_visual.py` con los parámetros por defecto, igual que en la Pi 5 (todas las imágenes, 10 inferencias de calentamiento, 5 minutos de estabilidad por modelo y 60 s de enfriamiento antes de cada modelo). Duró 37 min 28 s, del 14/10/2026 00:03 a las 00:40. Datos crudos: `reports/benchmark_rpi4/resultados_rpi4_1hilo.json`; registro de la terminal: `reports/benchmark_rpi4/log_rpi4_1hilo.txt`.
+Corrida oficial: `pruebas_modelos/raspberry/benchmark_visual.py` con los parámetros por defecto, igual que en la Pi 5 (todas las imágenes, 10 inferencias de calentamiento, 5 minutos de estabilidad por modelo y 60 s de enfriamiento antes de cada modelo). Duró 37 min 28 s, del 14/10/2026 00:03 a las 00:40. Datos crudos: `reports/benchmark_rpi4/resultados_rpi4_1hilo.json`; registro de la terminal: `reports/benchmark_rpi4/log_rpi4_1hilo.txt`.
 
 ### 3.1 Precisión de clasificación
 
@@ -273,7 +273,7 @@ Se repitió la prueba con `--num-threads 4`: mismas 4,534 imágenes y 2 minutos 
 
 Todas provienen de la ejecución en la Raspberry Pi 4.
 
-**Gráficas** (`reports/figures/raspberry4/`): las mismas 14 del reporte de la Pi 5, generadas con `tests/graficar_benchmark_rpi.py` a partir de los JSON de la Pi 4.
+**Gráficas** (`reports/figures/raspberry4/`): las mismas 14 del reporte de la Pi 5, generadas con `pruebas_modelos/reportes/graficar_benchmark_rpi.py` a partir de los JSON de la Pi 4.
 
 | Archivo | Contenido |
 |---|---|
@@ -324,9 +324,9 @@ Todas provienen de la ejecución en la Raspberry Pi 4.
 
 **Scripts utilizados:**
 
-- `tests/benchmark_visual.py`: el benchmark, el mismo de la Pi 5. Después de la corrida oficial solo se cambió para que los títulos muestren la placa detectada en lugar de "Raspberry Pi 5"; la medición no cambió.
-- `tests/graficar_benchmark_rpi.py`: genera las gráficas y convierte las capturas. Se adaptó para tomar el nombre de la placa del JSON y para que las escalas funcionen con latencias más altas. Con los datos de la Pi 5 produce las mismas gráficas que antes.
-- `tests/generar_pdf_reporte.py`: convierte este reporte a PDF. Se adaptó para recibir el `.md`, el PDF de salida y el JSON por parámetro.
+- `pruebas_modelos/raspberry/benchmark_visual.py`: el benchmark, el mismo de la Pi 5. Después de la corrida oficial solo se cambió para que los títulos muestren la placa detectada en lugar de "Raspberry Pi 5"; la medición no cambió.
+- `pruebas_modelos/reportes/graficar_benchmark_rpi.py`: genera las gráficas y convierte las capturas. Se adaptó para tomar el nombre de la placa del JSON y para que las escalas funcionen con latencias más altas. Con los datos de la Pi 5 produce las mismas gráficas que antes.
+- `pruebas_modelos/reportes/generar_pdf_reporte.py`: convierte este reporte a PDF. Se adaptó para recibir el `.md`, el PDF de salida y el JSON por parámetro.
 
 **En la Raspberry Pi 4** (carpeta `~/ecosort_benchmark/` con `benchmark_visual.py`, `modelos/`, `test_set/` y `venv/`):
 
@@ -344,7 +344,7 @@ venv/bin/python benchmark_visual.py --max-imagenes 1500 --duracion-estabilidad 3
 
 ```bash
 # Gráficas y capturas
-venv/bin/python tests/graficar_benchmark_rpi.py \
+venv/bin/python pruebas_modelos/reportes/graficar_benchmark_rpi.py \
     --resultados reports/benchmark_rpi4/resultados_rpi4_1hilo.json \
     --resultados-hilos reports/benchmark_rpi4/resultados_rpi4_4hilos.json \
     --capturas reports/benchmark_rpi4/capturas_svg \
@@ -352,7 +352,7 @@ venv/bin/python tests/graficar_benchmark_rpi.py \
     --salida reports/figures/raspberry4
 
 # PDF
-uv run --no-project --python 3.12 --with weasyprint --with markdown tests/generar_pdf_reporte.py \
+uv run --no-project --python 3.12 --with weasyprint --with markdown pruebas_modelos/reportes/generar_pdf_reporte.py \
     --md docs/reporte_benchmark_rpi4.md --salida docs/reporte_benchmark_rpi4.pdf \
     --datos reports/benchmark_rpi4/resultados_rpi4_1hilo.json \
     --subtitulo "Comparación de MobileNetV3-Large, EfficientNetB0 y ShuffleNetV2 (ImageNet) en la Raspberry Pi 4 Model B, con la Raspberry Pi 5 como referencia"

@@ -3,8 +3,8 @@ Evalúa el modelo cuantizado (.tflite) sobre el mismo test set usado para
 evaluar el modelo .keras, con el fin de completar la comparación de
 precisión antes/después de la cuantización (sección 3.5.3 de la tesina).
 
-Uso (desde la raíz del repo, o copiando este archivo a tests/):
-    python evaluate_tflite.py
+Uso (desde la raíz del repo):
+    python pruebas_modelos/local/Evaluate_tflite.py
 
 Requiere: tensorflow, numpy, scikit-learn (ya están en requirements.txt)
 """
@@ -18,9 +18,9 @@ from sklearn.metrics import classification_report, confusion_matrix
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 # --- CONFIGURACIÓN DE RUTAS ---
-# Asume que este archivo vive en tests/, igual que test_camara_realtime.py.
+# Asume que este archivo vive en pruebas_modelos/local/ (dos niveles bajo la raíz).
 # Si lo colocas en otro lugar, ajusta BASE_DIR manualmente.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parents[2]
 MODELS_DIR = BASE_DIR / "models"
 DATA_DIR = BASE_DIR / "data" / "raw" / "waste_classification" / "test"
 

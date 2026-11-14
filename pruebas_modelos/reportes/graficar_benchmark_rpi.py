@@ -1,13 +1,13 @@
 """
 Genera las gráficas e imágenes de evidencia a partir de los resultados del
-benchmark hecho EN la Raspberry Pi 5 (tests/benchmark_visual.py).
+benchmark hecho EN la Raspberry Pi 5 (pruebas_modelos/raspberry/benchmark_visual.py).
 
 Todas las cifras que se grafican vienen del resultados.json medido en la
 Raspberry; este script solo dibuja, por eso puede correrse en la laptop
 (la Raspberry no tiene matplotlib instalado).
 
 Uso (desde la raíz del repo):
-    python tests/graficar_benchmark_rpi.py
+    python pruebas_modelos/reportes/graficar_benchmark_rpi.py
 
 Entradas (por defecto en reports/benchmark_rpi/):
     resultados_rpi_1hilo.json     corrida oficial
@@ -37,14 +37,17 @@ import numpy as np  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, PowerNorm  # noqa: E402
 from PIL import Image  # noqa: E402
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parents[2]
 DIR_DATOS = BASE_DIR / "reports" / "benchmark_rpi"
 DIR_FIGURAS = BASE_DIR / "reports" / "figures" / "raspberry"
 DIR_TEST = BASE_DIR / "data" / "raw" / "waste_classification" / "test"
 DISPOSITIVO = "Raspberry Pi 5"  # se reemplaza en main() por la placa que aparece en el JSON
 
-# Un color fijo por modelo en todas las gráficas (paleta validada para daltonismo)
-COLOR = {"mobilenet": "#2a78d6", "efficientnet": "#eb6834", "shufflenet": "#1baf7a"}
+# Un color fijo por modelo en todas las gráficas: los 5 primeros tonos de la paleta categórica validada
+# para daltonismo, en su orden. Con 5 tonos no todos los pares se distinguen bien entre sí, por eso cada
+# gráfica identifica los modelos también por nombre (eje, leyenda o etiqueta directa).
+COLOR = {"mobilenet": "#2a78d6", "efficientnet": "#eb6834", "shufflenet": "#1baf7a",
+         "squeezenet": "#eda100", "yolo": "#e87ba4"}
 SUPERFICIE = "#fcfcfb"
 TINTA = "#0b0b0b"
 TINTA_2 = "#52514e"
@@ -100,9 +103,30 @@ def contexto(d):
             f"{hilos} hilo{'s' if hilos > 1 else ''} · modelos .tflite cuantizados")
 
 
+def columnas_leyenda(n):
+    """Hasta 3 modelos caben en una fila; con más, la leyenda usa 2 filas."""
+    return n if n <= 3 else math.ceil(n / 2)
+
+
+def alto_leyenda(n):
+    """Pulgadas extra que ocupa la leyenda por cada fila después de la primera."""
+    return 0.24 * (math.ceil(n / columnas_leyenda(n)) - 1)
+
+
+def alto_barras(n, base):
+    """Alto de una figura de barras horizontales: el de 3 modelos más un carril por cada modelo extra."""
+    return base + 0.42 * max(0, n - 3)
+
+
+def tope(fig, pulgadas):
+    """Fracción 'top' de subplots_adjust que deja `pulgadas` libres arriba para el título y la leyenda."""
+    return 1 - pulgadas / fig.get_figheight()
+
+
 def leyenda_modelos(fig, modelos, y=0.9, marcador="s"):
     manijas = [plt.Line2D([], [], marker=marcador, ls="", color=COLOR[m["clave"]], markersize=8, label=m["nombre"]) for m in modelos]
-    fig.legend(handles=manijas, loc="upper left", bbox_to_anchor=(0.015, y), ncols=len(modelos), handletextpad=0.3, columnspacing=1.6)
+    fig.legend(handles=manijas, loc="upper left", bbox_to_anchor=(0.015, y), ncols=columnas_leyenda(len(modelos)),
+               handletextpad=0.3, columnspacing=1.6)
 
 
 # --------------------------------------------------------------------------
@@ -110,8 +134,11 @@ def leyenda_modelos(fig, modelos, y=0.9, marcador="s"):
 # --------------------------------------------------------------------------
 def fig_accuracy(d):
     modelos = d["modelos"]
-    fig, ax = plt.subplots(figsize=(8, 3.6))
-    fig.subplots_adjust(top=0.74, left=0.27, right=0.9)
+    fig, ax = plt.subplots(figsize=(8, alto_barras(len(modelos), 3.6)))
+    fig.subplots_adjust(top=tope(fig, 0.94), left=0.27, right=0.9)
+    intervalos = [wilson(m["clasificacion"]["aciertos"], m["clasificacion"]["total"]) for m in modelos]
+    x_min, x_max = min(i[0] for i in intervalos) * 100, max(i[1] for i in intervalos) * 100
+    margen = (x_max - x_min) * 0.3  # espacio a la derecha para el texto "N errores"
     for i, m in enumerate(modelos):
         c = m["clasificacion"]
         lo, hi = wilson(c["aciertos"], c["total"])
@@ -119,10 +146,10 @@ def fig_accuracy(d):
         ax.plot([lo * 100, hi * 100], [i, i], color=COLOR[m["clave"]], lw=2, solid_capstyle="round")
         ax.plot(acc, i, "o", color=COLOR[m["clave"]], markersize=10, markeredgecolor=SUPERFICIE, markeredgewidth=2)
         ax.text(acc, i - 0.28, f"{acc:.2f}%", ha="center", va="bottom", fontsize=11, fontweight="bold")
-        ax.text(hi * 100 + 0.12, i, f"{c['errores']} errores", va="center", fontsize=9, color=TINTA_2)
+        ax.text(hi * 100 + margen * 0.06, i, f"{c['errores']} errores", va="center", fontsize=9, color=TINTA_2)
     ax.set_yticks(range(len(modelos)), [m["nombre"] for m in modelos], fontsize=10.5)
     ax.set_ylim(len(modelos) - 0.5, -0.6)
-    ax.set_xlim(92, 98.5)
+    ax.set_xlim(math.floor(x_min - 0.3), x_max + margen)
     ax.set_xlabel("Accuracy sobre el conjunto de prueba (%)  —  el eje no inicia en cero")
     ax.grid(axis="x")
     ax.tick_params(axis="y", length=0)
@@ -134,11 +161,12 @@ def fig_accuracy(d):
 
 def fig_accuracy_por_clase(d):
     modelos, clases = d["modelos"], d["clases"]
-    fig, ax = plt.subplots(figsize=(8.5, 4.6))
-    fig.subplots_adjust(top=0.74, left=0.13)
+    fig, ax = plt.subplots(figsize=(8.5, 4.6 if len(modelos) <= 3 else 7.2))
+    fig.subplots_adjust(top=tope(fig, 1.2 + alto_leyenda(len(modelos))), left=0.13)
     for j, c in enumerate(clases):
         vals = [m["clasificacion"]["por_clase"][c]["accuracy"] * 100 for m in modelos]
-        desplaz = np.linspace(-0.22, 0.22, len(modelos))  # cada modelo en su propio carril para que no se encimen
+        ancho = 0.22 if len(modelos) <= 3 else 0.32
+        desplaz = np.linspace(-ancho, ancho, len(modelos))  # cada modelo en su propio carril para que no se encimen
         for m, v, dy in zip(modelos, vals, desplaz):
             ax.plot([0, v], [j + dy, j + dy], color=REJILLA, lw=1, zorder=1)
             ax.plot(v, j + dy, "o", color=COLOR[m["clave"]], markersize=10, markeredgecolor=SUPERFICIE, markeredgewidth=2, zorder=3)
@@ -152,16 +180,20 @@ def fig_accuracy_por_clase(d):
     ax.grid(axis="x")
     ax.tick_params(axis="y", length=0)
     ax.spines["left"].set_visible(False)
-    leyenda_modelos(fig, modelos, y=0.865, marcador="o")
+    leyenda_modelos(fig, modelos, y=1 - 0.62 / fig.get_figheight(), marcador="o")
     titulo(fig, f"Accuracy por clase en la {DISPOSITIVO}", contexto(d))
     guardar(fig, "02_accuracy_por_clase.png")
 
 
 def fig_matrices(d):
     modelos, clases = d["modelos"], d["clases"]
-    fig, axes = plt.subplots(1, len(modelos), figsize=(4.6 * len(modelos), 5.2))
-    fig.subplots_adjust(top=0.78, wspace=0.28, left=0.07, right=0.99, bottom=0.14)
-    for ax, m in zip(np.atleast_1d(axes), modelos):
+    columnas = len(modelos) if len(modelos) <= 3 else 3
+    filas = math.ceil(len(modelos) / columnas)
+    fig, axes = plt.subplots(filas, columnas, figsize=(4.6 * columnas, 4.1 * filas + 1.1), squeeze=False)
+    fig.subplots_adjust(top=tope(fig, 1.35), wspace=0.28, hspace=0.55, left=0.07, right=0.99, bottom=0.75 / fig.get_figheight())
+    for ax in axes.flat[len(modelos):]:
+        ax.axis("off")
+    for ax, m in zip(axes.flat, modelos):
         mat = np.array(m["clasificacion"]["matriz_confusion"])
         norm = mat / mat.sum(axis=1, keepdims=True)
         ax.imshow(norm, cmap=RAMPA_AZUL, norm=PowerNorm(gamma=0.35, vmin=0, vmax=1))
@@ -181,7 +213,8 @@ def fig_matrices(d):
         c = m["clasificacion"]
         ax.set_title(f"{m['nombre']}\n{c['accuracy'] * 100:.2f}% · {c['errores']} errores", fontsize=11, loc="left", color=TINTA)
         ax.set_xlabel("Clase predicha")
-    np.atleast_1d(axes)[0].set_ylabel("Clase real")
+    for ax in axes[:, 0]:
+        ax.set_ylabel("Clase real")
     titulo(fig, f"Matrices de confusión en la {DISPOSITIVO}",
            contexto(d) + "\nCada celda es el número de imágenes; el tono indica la proporción dentro de la clase real (escala realzada para que se vean los errores).", y=0.985)
     guardar(fig, "03_matrices_confusion.png")
@@ -204,8 +237,8 @@ def barras_h(ax, modelos, valores, etiquetas, unidad="", xmax=None):
 
 def fig_latencia(d):
     modelos = d["modelos"]
-    fig, ax = plt.subplots(figsize=(8, 3.5))
-    fig.subplots_adjust(top=0.74, left=0.27, right=0.95)
+    fig, ax = plt.subplots(figsize=(8, alto_barras(len(modelos), 3.5)))
+    fig.subplots_adjust(top=tope(fig, 0.91), left=0.27, right=0.95)
     medias = [m["latencia_ms"]["media"] for m in modelos]
     barras_h(ax, modelos, medias,
              [f"{m['latencia_ms']['media']:.2f} ms  ·  {m['cuadros_por_segundo']:.0f} cuadros/s" for m in modelos],
@@ -219,8 +252,8 @@ def fig_latencia(d):
 def fig_latencia_h1(d):
     modelos = d["modelos"]
     umbral = d["parametros"]["umbral_h1_ms"]
-    fig, ax = plt.subplots(figsize=(8, 3.6))
-    fig.subplots_adjust(top=0.72, left=0.27, right=0.95)
+    fig, ax = plt.subplots(figsize=(8, alto_barras(len(modelos), 3.6)))
+    fig.subplots_adjust(top=tope(fig, 1.0), left=0.27, right=0.95)
     maximos = [m["latencia_ms"]["max"] for m in modelos]
     etiquetas = [f"máx. {m['latencia_ms']['max']:.1f} ms  ·  margen ×{umbral / m['latencia_ms']['max']:.1f}" for m in modelos]
     dentro = [v > umbral * 0.55 for v in maximos]  # la etiqueta no cabe antes de la línea del límite: va dentro de la barra
@@ -240,7 +273,7 @@ def fig_distribucion_latencia(d):
     modelos = d["modelos"]
     w = d["parametros"]["n_warmup"]
     fig, axes = plt.subplots(len(modelos), 1, figsize=(8, 1.9 * len(modelos) + 1.5))
-    fig.subplots_adjust(top=0.82, hspace=0.75, left=0.08, right=0.96, bottom=0.1)
+    fig.subplots_adjust(top=tope(fig, 1.3), hspace=0.75, left=0.08, right=0.96, bottom=0.75 / fig.get_figheight())
     for ax, m in zip(np.atleast_1d(axes), modelos):
         lat = np.array(m["por_imagen"]["latencia_ms"][w:])
         r = m["latencia_ms"]
@@ -249,7 +282,7 @@ def fig_distribucion_latencia(d):
         ax.hist(lat, bins=np.linspace(lo - margen, hi + margen, 60), color=COLOR[m["clave"]], edgecolor=SUPERFICIE, linewidth=0.6)
         ax.axvline(r["media"], color=TINTA, lw=1)
         ax.set_title(f"{m['nombre']}   media {r['media']:.2f} ms · desv. est. {r['std']:.2f} ms · P50 {r['p50']:.2f} · "
-                     f"P95 {r['p95']:.2f} · P99 {r['p99']:.2f} · máx {r['max']:.2f}", fontsize=9.5, loc="left", color=TINTA)
+                     f"P95 {r['p95']:.2f} · P99 {r['p99']:.2f} · máx {r['max']:.2f}", fontsize=9, loc="left", color=TINTA)
         ax.grid(axis="y")
         ax.set_ylabel("Inferencias")
     np.atleast_1d(axes)[-1].set_xlabel("Latencia por imagen (ms)  —  cada panel tiene su propia escala; se muestra el 99% central")
@@ -261,8 +294,8 @@ def fig_distribucion_latencia(d):
 def fig_latencia_secuencia(d):
     modelos = d["modelos"]
     w = d["parametros"]["n_warmup"]
-    fig, ax = plt.subplots(figsize=(9, 4.4))
-    fig.subplots_adjust(top=0.74, right=0.97)
+    fig, ax = plt.subplots(figsize=(9, 4.4 + alto_leyenda(len(modelos))))
+    fig.subplots_adjust(top=tope(fig, 1.15 + alto_leyenda(len(modelos))), right=0.97)
     for m in modelos:
         lat = np.array(m["por_imagen"]["latencia_ms"])
         x = np.arange(1, len(lat) + 1)
@@ -272,7 +305,8 @@ def fig_latencia_secuencia(d):
     ax.set_xlabel("Número de imagen evaluada")
     ax.set_ylabel("Latencia (ms)")
     ax.grid(axis="y")
-    leyenda = fig.legend(loc="upper left", bbox_to_anchor=(0.015, 0.865), ncols=3, handlelength=1.4, columnspacing=1.4)
+    leyenda = fig.legend(loc="upper left", bbox_to_anchor=(0.015, 1 - 0.6 / fig.get_figheight()),
+                         ncols=columnas_leyenda(len(modelos)), handlelength=1.4, columnspacing=1.4)
     for linea in leyenda.get_lines():
         linea.set_linewidth(3)
     titulo(fig, "Latencia de cada inferencia a lo largo de la prueba", contexto(d))
@@ -283,8 +317,8 @@ def fig_estabilidad(d):
     modelos = d["modelos"]
     paneles = [("latencia_ms", "Latencia media\npor segundo (ms)", True), ("cpu_percent", "Uso de CPU\ntotal (%)", True),
                ("temperatura_c", "Temperatura\ndel SoC (°C)", False), ("ram_mb", "Variación de\nRAM (MB)", False)]
-    fig, axes = plt.subplots(len(paneles), 1, figsize=(9, 9), sharex=True)
-    fig.subplots_adjust(top=0.865, hspace=0.22, left=0.12, right=0.97, bottom=0.07)
+    fig, axes = plt.subplots(len(paneles), 1, figsize=(9, 9 + alto_leyenda(len(modelos))), sharex=True)
+    fig.subplots_adjust(top=tope(fig, 1.21 + alto_leyenda(len(modelos))), hspace=0.22, left=0.12, right=0.97, bottom=0.07)
     for ax, (clave, etiqueta, desde_cero) in zip(axes, paneles):
         for m in modelos:
             s = m["estabilidad"]["series"]
@@ -303,7 +337,7 @@ def fig_estabilidad(d):
             ax.set_ylim(-5, 5)
     axes[-1].set_xlabel("Tiempo de ejecución continua (s)")
     axes[-1].set_xlim(0, modelos[0]["estabilidad"]["duracion_segundos"])
-    leyenda_modelos(fig, modelos, y=0.925)
+    leyenda_modelos(fig, modelos, y=1 - 0.68 / fig.get_figheight())
     dur = modelos[0]["estabilidad"]["duracion_segundos"]
     duracion = f"{dur // 60} minuto{'s' if dur // 60 > 1 else ''}" if dur % 60 == 0 else f"{dur} segundos"
     titulo(fig, f"Prueba de estabilidad: {duracion} de inferencia continua por modelo",
@@ -315,15 +349,39 @@ def fig_compromiso(d):
     modelos = d["modelos"]
     fig, ax = plt.subplots(figsize=(8, 5))
     fig.subplots_adjust(top=0.72)
-    for m in modelos:
-        x, y = m["latencia_ms"]["media"], m["clasificacion"]["accuracy"] * 100
-        ax.scatter(x, y, s=m["tam_tflite_mb"] * 160, color=COLOR[m["clave"]], edgecolor=SUPERFICIE, linewidth=2, zorder=3)
-        ax.annotate(f"{m['nombre']}\n{y:.2f}% · {x:.1f} ms · {m['tam_tflite_mb']:.2f} MB", (x, y), xytext=(0, -22),
-                    textcoords="offset points", ha="center", va="top", fontsize=9.5, color=TINTA)
     xs = [m["latencia_ms"]["media"] for m in modelos]
     ys = [m["clasificacion"]["accuracy"] * 100 for m in modelos]
     ax.set_xlim(0, max(xs) * 1.25)
     ax.set_ylim(min(ys) - 1.6, max(ys) + 0.8)
+    for m, x, y in zip(modelos, xs, ys):
+        ax.scatter(x, y, s=m["tam_tflite_mb"] * 160, color=COLOR[m["clave"]], edgecolor=SUPERFICIE, linewidth=2, zorder=3)
+    # Cada etiqueta va debajo de su círculo; si choca con otra etiqueta o con otro círculo, se prueba
+    # arriba, a la derecha y a la izquierda (con 5 modelos hay círculos muy cercanos)
+    render = fig.canvas.get_renderer()
+    ocupado = []
+    for m, x, y in zip(modelos, xs, ys):
+        cx, cy = ax.transData.transform((x, y))
+        r = math.sqrt(m["tam_tflite_mb"] * 160) / 2 * fig.dpi / 72 + 2
+        ocupado.append((cx - r, cy - r, cx + r, cy + r))
+    caja_ax = ax.get_window_extent(render)
+    for i, (m, x, y) in enumerate(zip(modelos, xs, ys)):
+        otros = ocupado[:i] + ocupado[i + 1:]  # su propio círculo no cuenta
+        sep = math.sqrt(m["tam_tflite_mb"] * 160) / 2 + 6
+        texto = f"{m['nombre']}\n{y:.2f}% · {x:.1f} ms · {m['tam_tflite_mb']:.2f} MB"
+        for dx, dy, ha, va in ((0, -sep, "center", "top"), (0, sep, "center", "bottom"),
+                               (sep, 0, "left", "center"), (-sep, 0, "right", "center")):
+            et = ax.annotate(texto, (x, y), xytext=(dx, dy), textcoords="offset points", ha=ha, va=va, fontsize=9.5, color=TINTA)
+            b = et.get_window_extent(render)
+            choca = any(b.x0 < c[2] and b.x1 > c[0] and b.y0 < c[3] and b.y1 > c[1] for c in otros)
+            dentro = b.x0 >= caja_ax.x0 and b.x1 <= caja_ax.x1 and b.y0 >= caja_ax.y0 and b.y1 <= caja_ax.y1
+            if not choca and dentro:
+                break
+            et.remove()
+        else:  # ninguna posición queda libre: se deja debajo
+            et = ax.annotate(texto, (x, y), xytext=(0, -sep), textcoords="offset points", ha="center", va="top",
+                             fontsize=9.5, color=TINTA)
+            b = et.get_window_extent(render)
+        ocupado.append((b.x0, b.y0, b.x1, b.y1))
     ax.set_xlabel("Latencia media por imagen (ms)  —  menos es mejor")
     ax.set_ylabel("Accuracy (%)  —  más es mejor")
     ax.grid(True)
@@ -342,8 +400,9 @@ def fig_recursos(d):
         ("Temperatura máxima (°C)", [m["estabilidad"]["temperatura_c"]["max"] for m in modelos], "{:.1f} °C"),
         ("Tiempo de carga del modelo (ms)", [m["carga_ms"] for m in modelos], "{:.0f} ms"),
     ]
-    fig, axes = plt.subplots(3, 2, figsize=(11, 7.4))
-    fig.subplots_adjust(top=0.86, hspace=0.75, wspace=0.62, left=0.17, right=0.94, bottom=0.07)
+    fig, axes = plt.subplots(3, 2, figsize=(11, 7.4 + 3 * 0.42 * max(0, len(modelos) - 3)))
+    fig.subplots_adjust(top=tope(fig, 1.04), hspace=0.75 if len(modelos) <= 3 else 0.55, wspace=0.62, left=0.17, right=0.94,
+                        bottom=0.07)
     for ax, (nombre, valores, fmt) in zip(axes.flat, paneles):
         barras_h(ax, modelos, valores, [fmt.format(v) for v in valores])
         ax.set_title(nombre, fontsize=10, loc="left", color=TINTA)
@@ -355,8 +414,8 @@ def fig_hilos(d1, d4):
     modelos = d1["modelos"]
     por_clave = {m["clave"]: m for m in d4["modelos"]}
     h4 = d4["parametros"]["num_threads"]
-    fig, ax = plt.subplots(figsize=(8.5, 4.6))
-    fig.subplots_adjust(top=0.76, left=0.25, right=0.93)
+    fig, ax = plt.subplots(figsize=(8.5, alto_barras(len(modelos), 4.6) + 0.3 * max(0, len(modelos) - 3)))
+    fig.subplots_adjust(top=tope(fig, 1.1), left=0.25, right=0.93)
     y, alto = np.arange(len(modelos)), 0.3
     sep = max(m["latencia_ms"]["media"] for m in modelos) * 0.012
     for i, m in enumerate(modelos):
@@ -392,16 +451,24 @@ def _pie_predicciones(ax, d, idx, real):
     ax.text(0, -0.05, f"Real: {real}", transform=ax.transAxes, fontsize=9, fontweight="bold", va="top", color=TINTA)
     for k, m in enumerate(d["modelos"]):
         pred, conf = m["por_imagen"]["predicha"][idx], m["por_imagen"]["confianza"][idx]
-        y = -0.17 - 0.115 * k
+        y = -0.17 - PASO_PIE * k
         ax.plot(0.03, y - 0.032, "s", color=COLOR[m["clave"]], markersize=6, transform=ax.transAxes, clip_on=False)
         ax.text(0.09, y, f"{'✓' if pred == real else '✗'} {pred} ({conf * 100:.0f}%)", transform=ax.transAxes, fontsize=8.5,
                 va="top", color=TINTA if pred == real else CRITICO, fontweight="normal" if pred == real else "bold")
 
 
+PASO_PIE = 0.115  # separación entre las líneas de predicción bajo cada imagen (fracción del alto de la imagen)
+
+
 def fig_mosaico(d, dir_test, indices, nombre, tit, sub, columnas=5):
     filas = math.ceil(len(indices) / columnas)
-    fig, axes = plt.subplots(filas, columnas, figsize=(2.55 * columnas, 3.75 * filas + 1.3))
-    fig.subplots_adjust(top=1 - 1.25 / (3.75 * filas + 1.3), hspace=0.5, wspace=0.12, left=0.03, right=0.97, bottom=0.11 / filas + 0.04)
+    n = len(d["modelos"])
+    pie = 0.17 + PASO_PIE * n + 0.1  # alto del pie bajo cada imagen, en fracciones del alto de la imagen
+    alto_fila = 2.3 * (1 + pie)  # cada imagen mide unas 2.3 pulgadas
+    arriba = 1.25 + alto_leyenda(n)
+    alto = alto_fila * filas + arriba + 0.15
+    fig, axes = plt.subplots(filas, columnas, figsize=(2.55 * columnas, alto))
+    fig.subplots_adjust(top=1 - arriba / alto, hspace=pie, wspace=0.12, left=0.03, right=0.97, bottom=(2.3 * pie + 0.05) / alto)
     axes = np.atleast_2d(axes)
     for ax in axes.flat:
         ax.axis("off")
@@ -409,8 +476,8 @@ def fig_mosaico(d, dir_test, indices, nombre, tit, sub, columnas=5):
         ax.axis("on")
         _miniatura(ax, dir_test / d["imagenes"]["ruta"][idx])
         _pie_predicciones(ax, d, idx, d["imagenes"]["real"][idx])
-    leyenda_modelos(fig, d["modelos"], y=1 - 0.78 / (3.75 * filas + 1.3))
-    titulo(fig, tit, sub, y=1 - 0.1 / (3.75 * filas + 1.3))
+    leyenda_modelos(fig, d["modelos"], y=1 - 0.78 / alto)
+    titulo(fig, tit, sub, y=1 - 0.1 / alto)
     guardar(fig, nombre)
 
 
@@ -433,50 +500,70 @@ def figs_mosaicos(d, dir_test, seleccion):
         sub = "Dos imágenes al azar por clase. Bajo cada imagen: clase real y predicción de cada modelo con su confianza."
     fig_mosaico(d, dir_test, muestra, "12_ejemplos_predicciones.png", f"Ejemplos de predicciones hechas en la {DISPOSITIVO}", sub)
 
-    # Casos difíciles: imágenes en las que fallaron los tres modelos
+    # Casos difíciles: imágenes en las que fallaron todos los modelos
+    todos = n_modelos(len(preds))
     fallan_todos = [i for i in range(n) if all(p[i] != reales[i] for p in preds)]
     if seleccion.get("casos_dificiles"):
         elegidos = [pos[r] for r in seleccion["casos_dificiles"]]
         if any(i not in fallan_todos for i in elegidos):
-            raise SystemExit("La selección de casos difíciles incluye imágenes que no fallaron los tres modelos")
-        sub = f"{len(fallan_todos)} de {n:,} imágenes fueron mal clasificadas por los tres modelos; se muestran {len(elegidos)}."
+            raise SystemExit(f"La selección de casos difíciles incluye imágenes que no fallaron {todos}")
+        sub = f"{len(fallan_todos)} de {n:,} imágenes fueron mal clasificadas por {todos}; se muestran {len(elegidos)}."
     elif fallan_todos:
         elegidos = sorted(rng.choice(fallan_todos, size=min(10, len(fallan_todos)), replace=False).tolist())
-        sub = f"{len(fallan_todos)} de {n:,} imágenes fueron mal clasificadas por los tres modelos; se muestran {len(elegidos)} al azar."
+        sub = f"{len(fallan_todos)} de {n:,} imágenes fueron mal clasificadas por {todos}; se muestran {len(elegidos)} al azar."
     else:
         return
     fig_mosaico(d, dir_test, elegidos, "13_errores_comunes.png",
-                "Casos difíciles: imágenes que los tres modelos clasificaron mal", sub)
+                f"Casos difíciles: imágenes que {todos} clasificaron mal", sub)
+
+
+def luminancia(color):
+    """Luminancia relativa (WCAG) de un color, de 0 (negro) a 1 (blanco)."""
+    lineal = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in matplotlib.colors.to_rgb(color)]
+    return 0.2126 * lineal[0] + 0.7152 * lineal[1] + 0.0722 * lineal[2]
+
+
+def n_modelos(n):
+    return {2: "los dos modelos", 3: "los tres modelos"}.get(n, f"los {n} modelos")
 
 
 def fig_coincidencia_errores(d):
     """Cuántas imágenes falla cada modelo en exclusiva y cuántas fallan varios a la vez."""
     reales = d["imagenes"]["real"]
     modelos = d["modelos"]
+    n = len(modelos)
     fallo = np.array([[p != r for p, r in zip(m["por_imagen"]["predicha"], reales)] for m in modelos])
     cuantos = fallo.sum(axis=0)
-    etiquetas = ["Solo este modelo", "Este y otro modelo", "Los tres modelos"]
+    # Grupos según cuántos modelos fallaron la misma imagen: solo uno, algunos (2 a n-1) o todos
+    if n == 3:
+        grupos = [("Solo este modelo", [1]), ("Este y otro modelo", [2]), ("Los tres modelos", [3])]
+    else:
+        grupos = [("Solo este modelo", [1]), (f"Entre 2 y {n - 1} modelos", list(range(2, n))),
+                  (n_modelos(n).capitalize(), [n])]
     tonos = [1.0, 0.6, 0.3]
-    fig, ax = plt.subplots(figsize=(8.5, 3.8))
-    fig.subplots_adjust(top=0.7, left=0.25, right=0.95)
+    xmax = fallo.sum(axis=1).max() * 1.18
+    fig, ax = plt.subplots(figsize=(8.5, alto_barras(n, 3.8)))
+    fig.subplots_adjust(top=tope(fig, 1.14), left=0.25, right=0.95)
     for i, m in enumerate(modelos):
         izq = 0
-        for k, (e, a) in enumerate(zip(etiquetas, tonos), start=1):
-            v = int((fallo[i] & (cuantos == k)).sum())
+        for (e, ks), a in zip(grupos, tonos):
+            v = int((fallo[i] & np.isin(cuantos, ks)).sum())
             ax.barh(i, v, left=izq, height=0.5, color=COLOR[m["clave"]], alpha=a, edgecolor=SUPERFICIE, linewidth=2)
-            if v >= 12:
+            if v >= xmax * 0.05:
+                claro = a < 1.0 or luminancia(COLOR[m["clave"]]) > 0.3  # en tonos claros el blanco no se lee
                 ax.text(izq + v / 2, i, str(v), ha="center", va="center", fontsize=9.5,
-                        color="white" if a == 1.0 else TINTA, fontweight="bold")
+                        color=TINTA if claro else "white", fontweight="bold")
             izq += v
-        ax.text(izq + 3, i, f"{izq} errores", va="center", fontsize=10)
+        ax.text(izq + xmax * 0.01, i, f"{izq} errores", va="center", fontsize=10)
     ax.set_yticks(range(len(modelos)), [m["nombre"] for m in modelos], fontsize=10.5)
     ax.set_ylim(len(modelos) - 0.4, -0.6)
-    ax.set_xlim(0, fallo.sum(axis=1).max() * 1.18)
+    ax.set_xlim(0, xmax)
     ax.tick_params(axis="y", length=0)
     ax.grid(axis="x")
     ax.set_xlabel("Imágenes mal clasificadas")
-    manijas = [plt.Rectangle((0, 0), 1, 1, color=TINTA_2, alpha=a, label=e) for e, a in zip(etiquetas, tonos)]
-    fig.legend(handles=manijas, loc="upper left", bbox_to_anchor=(0.015, 0.83), ncols=3, handlelength=1.2, columnspacing=1.6)
+    manijas = [plt.Rectangle((0, 0), 1, 1, color=TINTA_2, alpha=a, label=e) for (e, _), a in zip(grupos, tonos)]
+    fig.legend(handles=manijas, loc="upper left", bbox_to_anchor=(0.015, 1 - 0.65 / fig.get_figheight()), ncols=3,
+               handlelength=1.2, columnspacing=1.6)
     titulo(fig, "¿Los modelos se equivocan en las mismas imágenes?",
            contexto(d) + "\nCada barra reparte los errores de un modelo según cuántos modelos fallaron en esa misma imagen.")
     guardar(fig, "14_coincidencia_errores.png")

@@ -18,7 +18,7 @@ Si un notebook no tiene outputs guardados (aún no fue ejecutado),
 se marca como "Pendiente" en la tabla.
 
 Uso (desde la raíz del repo):
-    python tests/comparar_modelos.py
+    python pruebas_modelos/local/comparar_modelos.py
 
 Requiere: tabulate  (opcional, para mejor formato)
     pip install tabulate
@@ -39,7 +39,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # CONFIGURACIÓN
 # ---------------------------------------------------------------------------
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parents[2]
 NOTEBOOKS_DIR = BASE_DIR / "notebooks"
 MODELS_DIR = BASE_DIR / "models"
 

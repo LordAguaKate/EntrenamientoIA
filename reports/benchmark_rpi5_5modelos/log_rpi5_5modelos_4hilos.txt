@@ -1,0 +1,478 @@
+╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                                                                          ║
+║    EcoSort · Clasificación de residuos                                                                                                   ║
+║    Benchmark comparativo de inferencia en Raspberry Pi 5                                                                                 ║
+║    MobileNetV3-Large · EfficientNetB0 · ShuffleNetV2 (ImageNet) · SqueezeNet v1.1 (ImageNet) · YOLO11s-cls                               ║
+║                                                                                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+
+───────────────────────────────────────────────────────  ETAPA 1  Sistema y modelos ────────────────────────────────────────────────────────
+Se identifica el dispositivo y se inspecciona cada modelo .tflite: tamaño, tensores de entrada/salida y memoria que ocupa cargado en un 
+proceso aislado.
+
+╭─────────────────────────────────────────────────────────── Ficha del entorno ────────────────────────────────────────────────────────────╮
+│ Placa                Raspberry Pi 5 Model B Rev 1.1                                                                                      │
+│ Sistema              Debian GNU/Linux 13 (trixie)                                                                                        │
+│ Kernel               6.18.50+rpt-rpi-2712                                                                                                │
+│ Arquitectura         aarch64                                                                                                             │
+│ Python               3.13.5                                                                                                              │
+│ RAM total            15.8 GiB                                                                                                            │
+│ Núcleos              4                                                                                                                   │
+│ Runtime              ai_edge_litert                                                                                                      │
+│ Hilos de inferencia  4                                                                                                                   │
+│ Temperatura inicial  56.8 °C                                                                                                             │
+│ Preprocesamiento     el de entrenamiento de cada modelo (ver la tabla); la normalización va dentro del modelo                            │
+│ Inicio               2026-10-17 18:35:03                                                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                             Modelos a evaluar                                                              
+╭───┬────────────────────────────┬───────────────────────────┬─────────┬──────────────────────────┬───────────────────────┬────────────────╮
+│ # │ Modelo                     │ Archivo                   │  Tamaño │ Entrada                  │ Preprocesamiento      │ RAM del modelo │
+├───┼────────────────────────────┼───────────────────────────┼─────────┼──────────────────────────┼───────────────────────┼────────────────┤
+│ 1 │ MobileNetV3-Large          │ modelo_residuos_rpi_V3_0… │ 3.24 MB │ [1, 224, 224, 3] float32 │ estirar · 0-255       │        17.2 MB │
+│ 2 │ EfficientNetB0             │ modelo_residuos_Efficien… │ 4.50 MB │ [1, 224, 224, 3] float32 │ estirar · 0-255       │        34.3 MB │
+│ 3 │ ShuffleNetV2 (ImageNet)    │ modelo_residuos_shufflen… │ 1.50 MB │ [1, 224, 224, 3] float32 │ estirar · 0-255       │        12.3 MB │
+│ 4 │ SqueezeNet v1.1 (ImageNet) │ modelo_residuos_SqueezeN… │ 0.81 MB │ [1, 224, 224, 3] float32 │ estirar · 0-255       │        10.9 MB │
+│ 5 │ YOLO11s-cls                │ modelo_residuos_YOLO_v1.… │ 5.39 MB │ [1, 3, 224, 224] float32 │ recorte central · 0-1 │        21.8 MB │
+╰───┴────────────────────────────┴───────────────────────────┴─────────┴──────────────────────────┴───────────────────────┴────────────────╯
+Salida de todos los modelos: [1, 5] float32 (softmax sobre las 5 clases)
+✔ Energía correcta al iniciar
+
+──────────────────────────────────────────────────  ETAPA 2  Carga de imágenes de prueba ───────────────────────────────────────────────────
+Se toman 4534 imágenes alternando entre clases, se llevan a 224x224 con el preprocesamiento de entrenamiento de cada modelo y se dejan en 
+memoria. Todos los modelos evalúan exactamente las mismas imágenes; se carga un juego por preprocesamiento (2).
+
+/usr/lib/python3/dist-packages/PIL/Image.py:1045: UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images
+  warnings.warn(
+  Cargando imágenes · estirar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4534/4534 0:00:37
+✔ Juego 'estirar' (MobileNetV3-Large, EfficientNetB0, ShuffleNetV2 (ImageNet), SqueezeNet v1.1 (ImageNet)): 4534 imágenes preprocesadas en 
+37.7 s (8.3 ms por imagen)
+  Cargando imágenes · recorte_central ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4534/4534 0:00:56
+✔ Juego 'recorte_central' (YOLO11s-cls): 4534 imágenes preprocesadas en 57.0 s (12.6 ms por imagen)
+                        Imágenes por clase                        
+                                                                  
+  Clase      Imágenes                                             
+ ──────────────────────────────────────────────────────────────── 
+  aluminio        888   ████████████████████████████░░░░░░░░░░░░  
+  carton          730   ███████████████████████░░░░░░░░░░░░░░░░░  
+  otros          1164   █████████████████████████████████████░░░  
+  plastico       1268   ████████████████████████████████████████  
+  vidrio          484   ███████████████░░░░░░░░░░░░░░░░░░░░░░░░░  
+  Total          4534                                             
+                                                                  
+
+────────────────────────────────────────  MODELO 1/5 · a  MobileNetV3-Large — latencia y precisión ─────────────────────────────────────────
+Por cada imagen se cronometra set_tensor + invoke + get_tensor. Las primeras 10 inferencias son de calentamiento y se descartan de la 
+latencia (no de la precisión).
+
+
+Enfriamiento de 60 s terminado · temperatura 51.8 °C
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+✔ MobileNetV3-Large cargado en 15 ms
+ MobileNetV3-Large   Medición de latencia y precisión  4534/4534
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        #   Fase          Imagen                            Real            Predicha       Confianza                         Latencia       
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+     4530   MEDIDA        train_top_pet_392.jpg             plastico        plastico       ██████████ 100.0%                  9.16 ms   ✔   
+     4531   MEDIDA        train_top_pet_395.jpg             plastico        plastico       ██████████ 100.0%                  9.24 ms   ✔   
+     4532   MEDIDA        train_top_pet_399.jpg             plastico        plastico       ██████████ 100.0%                  9.44 ms   ✔   
+     4533   MEDIDA        train_top_pet_400.jpg             plastico        plastico       ██████████ 100.0%                 10.75 ms   ✔   
+     4534   MEDIDA        train_top_pet_402.jpg             plastico        plastico       ██████████ 100.0%                  9.22 ms   ✔   
+                                                                                                                                            
+╭────────────────────────────────────────────────────────── Estadísticas en vivo ──────────────────────────────────────────────────────────╮
+│ Media               Desv. est.          Mín                 Máx                P95                Cuadros/s          Precisión acumulada │
+│ 10.16 ms            1.59 ms             7.91 ms             26.59 ms           12.24 ms           98.4               96.47%  (160        │
+│                                                                                                                      errores)            │
+│                                                                                                                                          │
+│ Latencia media vs límite H1 (200 ms)  ━━━━╸                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+─────────────────────────────────────────────  MODELO 1/5 · b  MobileNetV3-Large — estabilidad ─────────────────────────────────────────────
+Inferencia continua durante 02:00 (mm:ss) muestreando CPU, RAM, temperatura y latencia cada 1 s.
+
+╭───────────────────────────────────────────────── Ejecución continua · MobileNetV3-Large ─────────────────────────────────────────────────╮
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━       02:00 / 02:00  (faltan 00:00) │
+│                                                                                                                                          │
+│ Modelo              MobileNetV3-Large                                                                                                    │
+│ Inferencias         11,550   99.9 inf/s   latencia 9.86 ms                                                                               │
+│                                                                                                                                          │
+│ CPU total            98.3%  ████████████████████████████████████████████████████████████                                                 │
+│   núcleo 0          ████████████████████████  98.0%                                                                                      │
+│   núcleo 1          ███████████████████████░  97.1%                                                                                      │
+│   núcleo 2          ████████████████████████ 100.0%                                                                                      │
+│   núcleo 3          ████████████████████████  98.0%                                                                                      │
+│                                                                                                                                          │
+│ RAM proceso         1611.08 MB  sistema 13.7% usada                                                                                      │
+│ Temperatura          66.7 °C  ▅▅▆▅▅▅▆▆▆▆▆▅▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆                                               │
+│ Frecuencia CPU      2400 MHz                                                                                                             │
+│ Estado energía      sin throttling ni bajo voltaje                                                                                       │
+│                                                                                                                                          │
+│ Latencia / seg      ▅▅▄▄▄▄▄▄▄▄▅▄▄▄▄▄▅▄▄▄▄▅▅▅▄▄▄▄▄▅▅▄▄▄▄▄▄▄▅▅▄▅▅▄▅▅▄▅▄▅▅▅▅▅▅▄▅▅▄▄                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯                                                Resumen · MobileNetV3-Large                                                 
+╭───────────────────────────────────────────┬─────────────────────────────────────┬───────────────┬────────────────────────╮
+│ Métrica                                   │ Valor                               │ Criterio      │ Estado                 │
+├───────────────────────────────────────────┼─────────────────────────────────────┼───────────────┼────────────────────────┤
+│ Precisión (accuracy)                      │ 96.47%  (4374/4534, 160 errores)    │ -             │ -                      │
+│ F1 macro                                  │ 0.9627                              │ -             │ -                      │
+│ Latencia media                            │ 10.16 ms (±1.59)  ·  98.4 cuadros/s │ < 200 ms (H1) │ ✔ CUMPLE  margen x19.7 │
+│ Latencia P95 / máx                        │ 12.24 ms / 26.59 ms                 │ < 200 ms (H1) │ ✔ CUMPLE               │
+│ Inferencias continuas                     │ 11,550 en 02:00  (96.2 inf/s)       │ -             │ -                      │
+│ CPU media / máx                           │ 96.0% / 98.3%                       │ -             │ -                      │
+│ RAM proceso (inicio → fin)                │ 1611.08 → 1611.08 MB  (Δ +0.00)     │ Δ ≤ 2 MB      │ ✔ CUMPLE               │
+│ Deriva de latencia (primer vs último 10%) │ +2.14%                              │ |Δ| ≤ 5%      │ ✔ CUMPLE               │
+│ Temperatura media / máx                   │ 65.8 °C / 67.8 °C                   │ < 80 °C       │ ✔ CUMPLE               │
+│ Throttling / bajo voltaje                 │ ninguno                             │ ninguno       │ ✔ CUMPLE               │
+╰───────────────────────────────────────────┴─────────────────────────────────────┴───────────────┴────────────────────────╯
+ Matriz de confusión · MobileNetV3-Large (filas = real, columnas = predicha) 
+╭─────────────────┬──────────┬────────┬───────┬──────────┬────────┬─────────╮
+│ Real \ Predicha │ aluminio │ carton │ otros │ plastico │ vidrio │ Acierto │
+├─────────────────┼──────────┼────────┼───────┼──────────┼────────┼─────────┤
+│ aluminio        │      869 │      1 │     9 │        7 │      2 │  97.86% │
+│ carton          │        6 │    712 │     9 │        3 │      0 │  97.53% │
+│ otros           │       11 │     10 │  1137 │        6 │      0 │  97.68% │
+│ plastico        │       19 │      8 │    16 │     1212 │     13 │  95.58% │
+│ vidrio          │        8 │      1 │     9 │       22 │    444 │  91.74% │
+╰─────────────────┴──────────┴────────┴───────┴──────────┴────────┴─────────╯
+
+──────────────────────────────────────────  MODELO 2/5 · a  EfficientNetB0 — latencia y precisión ──────────────────────────────────────────
+Por cada imagen se cronometra set_tensor + invoke + get_tensor. Las primeras 10 inferencias son de calentamiento y se descartan de la 
+latencia (no de la precisión).
+
+
+Enfriamiento de 60 s terminado · temperatura 54.5 °C
+✔ EfficientNetB0 cargado en 20 ms
+ EfficientNetB0   Medición de latencia y precisión  4534/4534
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        #   Fase          Imagen                            Real            Predicha       Confianza                         Latencia       
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+     4530   MEDIDA        train_top_pet_392.jpg             plastico        plastico       ██████████ 100.0%                 28.81 ms   ✔   
+     4531   MEDIDA        train_top_pet_395.jpg             plastico        plastico       ██████████ 100.0%                 30.16 ms   ✔   
+     4532   MEDIDA        train_top_pet_399.jpg             plastico        plastico       ██████████ 100.0%                 28.59 ms   ✔   
+     4533   MEDIDA        train_top_pet_400.jpg             plastico        plastico       ██████████ 100.0%                 29.52 ms   ✔   
+     4534   MEDIDA        train_top_pet_402.jpg             plastico        plastico       ██████████ 100.0%                 28.83 ms   ✔   
+                                                                                                                                            
+╭────────────────────────────────────────────────────────── Estadísticas en vivo ──────────────────────────────────────────────────────────╮
+│ Media               Desv. est.          Mín                 Máx                P95                Cuadros/s          Precisión acumulada │
+│ 29.23 ms            1.52 ms             27.44 ms            68.19 ms           30.47 ms           34.2               96.67%  (151        │
+│                                                                                                                      errores)            │
+│                                                                                                                                          │
+│ Latencia media vs límite H1 (200 ms)  ━━━━━━━━━━━━━━                                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+──────────────────────────────────────────────  MODELO 2/5 · b  EfficientNetB0 — estabilidad ───────────────────────────────────────────────
+Inferencia continua durante 02:00 (mm:ss) muestreando CPU, RAM, temperatura y latencia cada 1 s.
+
+╭────────────────────────────────────────────────── Ejecución continua · EfficientNetB0 ───────────────────────────────────────────────────╮
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━       02:00 / 02:00  (faltan 00:00) │
+│                                                                                                                                          │
+│ Modelo              EfficientNetB0                                                                                                       │
+│ Inferencias         4,022   33.6 inf/s   latencia 29.47 ms                                                                               │
+│                                                                                                                                          │
+│ CPU total            96.3%  ████████████████████████████████████████████████████████████                                                 │
+│   núcleo 0          ███████████████████████░  97.0%                                                                                      │
+│   núcleo 1          ███████████████████████░  95.0%                                                                                      │
+│   núcleo 2          ███████████████████████░  95.0%                                                                                      │
+│   núcleo 3          ████████████████████████  98.0%                                                                                      │
+│                                                                                                                                          │
+│ RAM proceso         1629.22 MB  sistema 13.8% usada                                                                                      │
+│ Temperatura          68.8 °C  ▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆                                               │
+│ Frecuencia CPU      2400 MHz                                                                                                             │
+│ Estado energía      sin throttling ni bajo voltaje                                                                                       │
+│                                                                                                                                          │
+│ Latencia / seg      ▄▅▄▄▅▄▄▅▄▄▄▄▄▄▅▅▄▅▅▅▅▅▅▄▄▄▅▄▄▄▄▄▅▄▅▅▄▄▅▄▄▅▄▄▅▄▄▅▅▄▄▅▄▄▄▄▅▅▄▅                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯                                                 Resumen · EfficientNetB0                                                  
+╭───────────────────────────────────────────┬─────────────────────────────────────┬───────────────┬───────────────────────╮
+│ Métrica                                   │ Valor                               │ Criterio      │ Estado                │
+├───────────────────────────────────────────┼─────────────────────────────────────┼───────────────┼───────────────────────┤
+│ Precisión (accuracy)                      │ 96.67%  (4383/4534, 151 errores)    │ -             │ -                     │
+│ F1 macro                                  │ 0.9648                              │ -             │ -                     │
+│ Latencia media                            │ 29.23 ms (±1.52)  ·  34.2 cuadros/s │ < 200 ms (H1) │ ✔ CUMPLE  margen x6.8 │
+│ Latencia P95 / máx                        │ 30.47 ms / 68.19 ms                 │ < 200 ms (H1) │ ✔ CUMPLE              │
+│ Inferencias continuas                     │ 4,022 en 02:00  (33.5 inf/s)        │ -             │ -                     │
+│ CPU media / máx                           │ 96.2% / 97.1%                       │ -             │ -                     │
+│ RAM proceso (inicio → fin)                │ 1629.22 → 1629.22 MB  (Δ +0.00)     │ Δ ≤ 2 MB      │ ✔ CUMPLE              │
+│ Deriva de latencia (primer vs último 10%) │ +0.79%                              │ |Δ| ≤ 5%      │ ✔ CUMPLE              │
+│ Temperatura media / máx                   │ 67.4 °C / 69.4 °C                   │ < 80 °C       │ ✔ CUMPLE              │
+│ Throttling / bajo voltaje                 │ ninguno                             │ ninguno       │ ✔ CUMPLE              │
+╰───────────────────────────────────────────┴─────────────────────────────────────┴───────────────┴───────────────────────╯
+  Matriz de confusión · EfficientNetB0 (filas = real, columnas = predicha)   
+╭─────────────────┬──────────┬────────┬───────┬──────────┬────────┬─────────╮
+│ Real \ Predicha │ aluminio │ carton │ otros │ plastico │ vidrio │ Acierto │
+├─────────────────┼──────────┼────────┼───────┼──────────┼────────┼─────────┤
+│ aluminio        │      866 │      6 │     7 │        7 │      2 │  97.52% │
+│ carton          │        4 │    718 │     6 │        1 │      1 │  98.36% │
+│ otros           │       12 │     10 │  1130 │       10 │      2 │  97.08% │
+│ plastico        │       17 │      8 │    10 │     1217 │     16 │  95.98% │
+│ vidrio          │        5 │      0 │     5 │       22 │    452 │  93.39% │
+╰─────────────────┴──────────┴────────┴───────┴──────────┴────────┴─────────╯
+
+─────────────────────────────────────  MODELO 3/5 · a  ShuffleNetV2 (ImageNet) — latencia y precisión ──────────────────────────────────────
+Por cada imagen se cronometra set_tensor + invoke + get_tensor. Las primeras 10 inferencias son de calentamiento y se descartan de la 
+latencia (no de la precisión).
+
+
+Enfriamiento de 60 s terminado · temperatura 54.5 °C
+✔ ShuffleNetV2 (ImageNet) cargado en 9 ms
+ ShuffleNetV2 (ImageNet)   Medición de latencia y precisión  4534/4534
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        #   Fase          Imagen                            Real            Predicha       Confianza                         Latencia       
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+     4530   MEDIDA        train_top_pet_392.jpg             plastico        plastico       ██████████ 100.0%                  6.50 ms   ✔   
+     4531   MEDIDA        train_top_pet_395.jpg             plastico        plastico       ██████████  99.9%                  6.93 ms   ✔   
+     4532   MEDIDA        train_top_pet_399.jpg             plastico        plastico       █████████░  94.9%                  6.92 ms   ✔   
+     4533   MEDIDA        train_top_pet_400.jpg             plastico        plastico       ██████████ 100.0%                  7.15 ms   ✔   
+     4534   MEDIDA        train_top_pet_402.jpg             plastico        plastico       ██████████  99.8%                  7.05 ms   ✔   
+                                                                                                                                            
+╭────────────────────────────────────────────────────────── Estadísticas en vivo ──────────────────────────────────────────────────────────╮
+│ Media               Desv. est.          Mín                 Máx                P95                Cuadros/s          Precisión acumulada │
+│ 7.06 ms             0.73 ms             5.24 ms             24.47 ms           7.92 ms            141.6              94.18%  (264        │
+│                                                                                                                      errores)            │
+│                                                                                                                                          │
+│ Latencia media vs límite H1 (200 ms)  ━━━                                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+──────────────────────────────────────────  MODELO 3/5 · b  ShuffleNetV2 (ImageNet) — estabilidad ──────────────────────────────────────────
+Inferencia continua durante 02:00 (mm:ss) muestreando CPU, RAM, temperatura y latencia cada 1 s.
+
+╭────────────────────────────────────────────── Ejecución continua · ShuffleNetV2 (ImageNet) ──────────────────────────────────────────────╮
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━       02:00 / 02:00  (faltan 00:00) │
+│                                                                                                                                          │
+│ Modelo              ShuffleNetV2 (ImageNet)                                                                                              │
+│ Inferencias         16,611   139.8 inf/s   latencia 6.99 ms                                                                              │
+│                                                                                                                                          │
+│ CPU total            98.3%  ████████████████████████████████████████████████████████████                                                 │
+│   núcleo 0          ████████████████████████  99.0%                                                                                      │
+│   núcleo 1          ████████████████████████  98.0%                                                                                      │
+│   núcleo 2          ███████████████████████░  97.0%                                                                                      │
+│   núcleo 3          ████████████████████████  98.0%                                                                                      │
+│                                                                                                                                          │
+│ RAM proceso         1626.58 MB  sistema 13.8% usada                                                                                      │
+│ Temperatura          65.5 °C  ▆▅▆▅▅▅▆▅▅▆▆▆▅▆▅▆▅▅▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆                                               │
+│ Frecuencia CPU      2400 MHz                                                                                                             │
+│ Estado energía      sin throttling ni bajo voltaje                                                                                       │
+│                                                                                                                                          │
+│ Latencia / seg      ▄▄▅▅▄▅▅▄▄▅▅▅▄▅▄▄▄▅▄▄▄▅▅▄▄▅▅▄▄▄▅▅▅▅▄▄▅▄▄▄▄▅▄▅▄▅▅▄▅▄▄▄▅▄▄▄▅▅▅▄                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯                                             Resumen · ShuffleNetV2 (ImageNet)                                              
+╭───────────────────────────────────────────┬─────────────────────────────────────┬───────────────┬────────────────────────╮
+│ Métrica                                   │ Valor                               │ Criterio      │ Estado                 │
+├───────────────────────────────────────────┼─────────────────────────────────────┼───────────────┼────────────────────────┤
+│ Precisión (accuracy)                      │ 94.18%  (4270/4534, 264 errores)    │ -             │ -                      │
+│ F1 macro                                  │ 0.9381                              │ -             │ -                      │
+│ Latencia media                            │ 7.06 ms (±0.73)  ·  141.6 cuadros/s │ < 200 ms (H1) │ ✔ CUMPLE  margen x28.3 │
+│ Latencia P95 / máx                        │ 7.92 ms / 24.47 ms                  │ < 200 ms (H1) │ ✔ CUMPLE               │
+│ Inferencias continuas                     │ 16,611 en 02:00  (138.4 inf/s)      │ -             │ -                      │
+│ CPU media / máx                           │ 97.0% / 98.7%                       │ -             │ -                      │
+│ RAM proceso (inicio → fin)                │ 1626.58 → 1626.58 MB  (Δ +0.00)     │ Δ ≤ 2 MB      │ ✔ CUMPLE               │
+│ Deriva de latencia (primer vs último 10%) │ -1.32%                              │ |Δ| ≤ 5%      │ ✔ CUMPLE               │
+│ Temperatura media / máx                   │ 65.4 °C / 67.2 °C                   │ < 80 °C       │ ✔ CUMPLE               │
+│ Throttling / bajo voltaje                 │ ninguno                             │ ninguno       │ ✔ CUMPLE               │
+╰───────────────────────────────────────────┴─────────────────────────────────────┴───────────────┴────────────────────────╯
+   Matriz de confusión · ShuffleNetV2 (ImageNet) (filas = real, columnas =   
+                                  predicha)                                  
+╭─────────────────┬──────────┬────────┬───────┬──────────┬────────┬─────────╮
+│ Real \ Predicha │ aluminio │ carton │ otros │ plastico │ vidrio │ Acierto │
+├─────────────────┼──────────┼────────┼───────┼──────────┼────────┼─────────┤
+│ aluminio        │      848 │      6 │    20 │        7 │      7 │  95.50% │
+│ carton          │        9 │    711 │     5 │        5 │      0 │  97.40% │
+│ otros           │       17 │     11 │  1109 │       18 │      9 │  95.27% │
+│ plastico        │       33 │      9 │    26 │     1181 │     19 │  93.14% │
+│ vidrio          │       11 │      2 │    15 │       35 │    421 │  86.98% │
+╰─────────────────┴──────────┴────────┴───────┴──────────┴────────┴─────────╯
+
+────────────────────────────────────  MODELO 4/5 · a  SqueezeNet v1.1 (ImageNet) — latencia y precisión ────────────────────────────────────
+Por cada imagen se cronometra set_tensor + invoke + get_tensor. Las primeras 10 inferencias son de calentamiento y se descartan de la 
+latencia (no de la precisión).
+
+
+Enfriamiento de 60 s terminado · temperatura 52.9 °C
+✔ SqueezeNet v1.1 (ImageNet) cargado en 6 ms
+ SqueezeNet v1.1 (ImageNet)   Medición de latencia y precisión  4534/4534
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        #   Fase          Imagen                            Real            Predicha       Confianza                         Latencia       
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+     4530   MEDIDA        train_top_pet_392.jpg             plastico        plastico       ██████████ 100.0%                  4.61 ms   ✔   
+     4531   MEDIDA        train_top_pet_395.jpg             plastico        plastico       ██████████  99.9%                  4.54 ms   ✔   
+     4532   MEDIDA        train_top_pet_399.jpg             plastico        plastico       ██████████  96.1%                  4.59 ms   ✔   
+     4533   MEDIDA        train_top_pet_400.jpg             plastico        plastico       ██████████  99.9%                  4.65 ms   ✔   
+     4534   MEDIDA        train_top_pet_402.jpg             plastico        plastico       ██████████ 100.0%                  4.57 ms   ✔   
+                                                                                                                                            
+╭────────────────────────────────────────────────────────── Estadísticas en vivo ──────────────────────────────────────────────────────────╮
+│ Media               Desv. est.          Mín                 Máx                P95                Cuadros/s          Precisión acumulada │
+│ 4.64 ms             0.18 ms             4.50 ms             9.87 ms            4.74 ms            215.6              91.75%  (374        │
+│                                                                                                                      errores)            │
+│                                                                                                                                          │
+│ Latencia media vs límite H1 (200 ms)  ━━                                                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+────────────────────────────────────────  MODELO 4/5 · b  SqueezeNet v1.1 (ImageNet) — estabilidad ─────────────────────────────────────────
+Inferencia continua durante 02:00 (mm:ss) muestreando CPU, RAM, temperatura y latencia cada 1 s.
+
+╭──────────────────────────────────────────── Ejecución continua · SqueezeNet v1.1 (ImageNet) ─────────────────────────────────────────────╮
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━       02:00 / 02:00  (faltan 00:00) │
+│                                                                                                                                          │
+│ Modelo              SqueezeNet v1.1 (ImageNet)                                                                                           │
+│ Inferencias         24,866   206.7 inf/s   latencia 4.69 ms                                                                              │
+│                                                                                                                                          │
+│ CPU total            91.5%  ████████████████████████████████████████████████████████████                                                 │
+│   núcleo 0          █████████████████████░░░  88.9%                                                                                      │
+│   núcleo 1          █████████████████████░░░  88.8%                                                                                      │
+│   núcleo 2          ████████████████████████ 100.0%                                                                                      │
+│   núcleo 3          █████████████████████░░░  88.1%                                                                                      │
+│                                                                                                                                          │
+│ RAM proceso         1626.34 MB  sistema 13.8% usada                                                                                      │
+│ Temperatura          68.8 °C  ▅▆▆▅▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆                                               │
+│ Frecuencia CPU      2400 MHz                                                                                                             │
+│ Estado energía      sin throttling ni bajo voltaje                                                                                       │
+│                                                                                                                                          │
+│ Latencia / seg      ▅▄▄▄▄▄▄▄▄▄▄▄▄▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯                                            Resumen · SqueezeNet v1.1 (ImageNet)                                            
+╭───────────────────────────────────────────┬─────────────────────────────────────┬───────────────┬────────────────────────╮
+│ Métrica                                   │ Valor                               │ Criterio      │ Estado                 │
+├───────────────────────────────────────────┼─────────────────────────────────────┼───────────────┼────────────────────────┤
+│ Precisión (accuracy)                      │ 91.75%  (4160/4534, 374 errores)    │ -             │ -                      │
+│ F1 macro                                  │ 0.9111                              │ -             │ -                      │
+│ Latencia media                            │ 4.64 ms (±0.18)  ·  215.6 cuadros/s │ < 200 ms (H1) │ ✔ CUMPLE  margen x43.1 │
+│ Latencia P95 / máx                        │ 4.74 ms / 9.87 ms                   │ < 200 ms (H1) │ ✔ CUMPLE               │
+│ Inferencias continuas                     │ 24,866 en 02:00  (207.2 inf/s)      │ -             │ -                      │
+│ CPU media / máx                           │ 91.3% / 91.9%                       │ -             │ -                      │
+│ RAM proceso (inicio → fin)                │ 1626.34 → 1626.34 MB  (Δ +0.00)     │ Δ ≤ 2 MB      │ ✔ CUMPLE               │
+│ Deriva de latencia (primer vs último 10%) │ +2.35%                              │ |Δ| ≤ 5%      │ ✔ CUMPLE               │
+│ Temperatura media / máx                   │ 66.8 °C / 68.8 °C                   │ < 80 °C       │ ✔ CUMPLE               │
+│ Throttling / bajo voltaje                 │ ninguno                             │ ninguno       │ ✔ CUMPLE               │
+╰───────────────────────────────────────────┴─────────────────────────────────────┴───────────────┴────────────────────────╯
+ Matriz de confusión · SqueezeNet v1.1 (ImageNet) (filas = real, columnas =  
+                                  predicha)                                  
+╭─────────────────┬──────────┬────────┬───────┬──────────┬────────┬─────────╮
+│ Real \ Predicha │ aluminio │ carton │ otros │ plastico │ vidrio │ Acierto │
+├─────────────────┼──────────┼────────┼───────┼──────────┼────────┼─────────┤
+│ aluminio        │      834 │     17 │    19 │        5 │     13 │  93.92% │
+│ carton          │       11 │    698 │    12 │        7 │      2 │  95.62% │
+│ otros           │       38 │     19 │  1079 │       24 │      4 │  92.70% │
+│ plastico        │       46 │     16 │    25 │     1154 │     27 │  91.01% │
+│ vidrio          │       28 │      2 │    11 │       48 │    395 │  81.61% │
+╰─────────────────┴──────────┴────────┴───────┴──────────┴────────┴─────────╯
+
+───────────────────────────────────────────  MODELO 5/5 · a  YOLO11s-cls — latencia y precisión ────────────────────────────────────────────
+Por cada imagen se cronometra set_tensor + invoke + get_tensor. Las primeras 10 inferencias son de calentamiento y se descartan de la 
+latencia (no de la precisión).
+
+
+Enfriamiento de 60 s terminado · temperatura 53.5 °C
+✔ YOLO11s-cls cargado en 24 ms
+ YOLO11s-cls   Medición de latencia y precisión  4534/4534
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        #   Fase          Imagen                            Real            Predicha       Confianza                         Latencia       
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+     4530   MEDIDA        train_top_pet_392.jpg             plastico        plastico       ██████████ 100.0%                 13.07 ms   ✔   
+     4531   MEDIDA        train_top_pet_395.jpg             plastico        plastico       ██████████ 100.0%                 13.27 ms   ✔   
+     4532   MEDIDA        train_top_pet_399.jpg             plastico        plastico       ██████████  95.1%                 12.97 ms   ✔   
+     4533   MEDIDA        train_top_pet_400.jpg             plastico        plastico       ██████████ 100.0%                 12.93 ms   ✔   
+     4534   MEDIDA        train_top_pet_402.jpg             plastico        plastico       ██████████ 100.0%                 13.21 ms   ✔   
+                                                                                                                                            
+╭────────────────────────────────────────────────────────── Estadísticas en vivo ──────────────────────────────────────────────────────────╮
+│ Media               Desv. est.          Mín                 Máx                P95                Cuadros/s          Precisión acumulada │
+│ 12.96 ms            0.40 ms             12.09 ms            21.39 ms           13.44 ms           77.1               97.44%  (116        │
+│                                                                                                                      errores)            │
+│                                                                                                                                          │
+│ Latencia media vs límite H1 (200 ms)  ━━━━━━                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+────────────────────────────────────────────────  MODELO 5/5 · b  YOLO11s-cls — estabilidad ────────────────────────────────────────────────
+Inferencia continua durante 02:00 (mm:ss) muestreando CPU, RAM, temperatura y latencia cada 1 s.
+
+╭──────────────────────────────────────────────────── Ejecución continua · YOLO11s-cls ────────────────────────────────────────────────────╮
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━       02:00 / 02:00  (faltan 00:00) │
+│                                                                                                                                          │
+│ Modelo              YOLO11s-cls                                                                                                          │
+│ Inferencias         8,850   74.3 inf/s   latencia 13.05 ms                                                                               │
+│                                                                                                                                          │
+│ CPU total            93.1%  ████████████████████████████████████████▇███████████████████                                                 │
+│   núcleo 0          ██████████████████████░░  90.7%                                                                                      │
+│   núcleo 1          ██████████████████████░░  89.8%                                                                                      │
+│   núcleo 2          ████████████████████████ 100.0%                                                                                      │
+│   núcleo 3          ██████████████████████░░  90.8%                                                                                      │
+│                                                                                                                                          │
+│ RAM proceso         1631.30 MB  sistema 13.8% usada                                                                                      │
+│ Temperatura          68.3 °C  ▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆                                               │
+│ Frecuencia CPU      2400 MHz                                                                                                             │
+│ Estado energía      sin throttling ni bajo voltaje                                                                                       │
+│                                                                                                                                          │
+│ Latencia / seg      ▄▄▄▄▄▄▄▄▅▄▄▄▄▄▄▄▄▄▄▄▄▄▅▄▄▅▅▄▄▄▄▄▄▄▄▄▄▅▄▅▅▄▅▄▄▄▄▄▄▄▄▄▄▅▄▄▅▅▄▄                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯                                                   Resumen · YOLO11s-cls                                                    
+╭───────────────────────────────────────────┬─────────────────────────────────────┬───────────────┬────────────────────────╮
+│ Métrica                                   │ Valor                               │ Criterio      │ Estado                 │
+├───────────────────────────────────────────┼─────────────────────────────────────┼───────────────┼────────────────────────┤
+│ Precisión (accuracy)                      │ 97.44%  (4418/4534, 116 errores)    │ -             │ -                      │
+│ F1 macro                                  │ 0.9728                              │ -             │ -                      │
+│ Latencia media                            │ 12.96 ms (±0.40)  ·  77.1 cuadros/s │ < 200 ms (H1) │ ✔ CUMPLE  margen x15.4 │
+│ Latencia P95 / máx                        │ 13.44 ms / 21.39 ms                 │ < 200 ms (H1) │ ✔ CUMPLE               │
+│ Inferencias continuas                     │ 8,850 en 02:00  (73.8 inf/s)        │ -             │ -                      │
+│ CPU media / máx                           │ 92.7% / 93.5%                       │ -             │ -                      │
+│ RAM proceso (inicio → fin)                │ 1631.30 → 1631.30 MB  (Δ +0.00)     │ Δ ≤ 2 MB      │ ✔ CUMPLE               │
+│ Deriva de latencia (primer vs último 10%) │ +0.38%                              │ |Δ| ≤ 5%      │ ✔ CUMPLE               │
+│ Temperatura media / máx                   │ 67.6 °C / 69.4 °C                   │ < 80 °C       │ ✔ CUMPLE               │
+│ Throttling / bajo voltaje                 │ ninguno                             │ ninguno       │ ✔ CUMPLE               │
+╰───────────────────────────────────────────┴─────────────────────────────────────┴───────────────┴────────────────────────╯
+    Matriz de confusión · YOLO11s-cls (filas = real, columnas = predicha)    
+╭─────────────────┬──────────┬────────┬───────┬──────────┬────────┬─────────╮
+│ Real \ Predicha │ aluminio │ carton │ otros │ plastico │ vidrio │ Acierto │
+├─────────────────┼──────────┼────────┼───────┼──────────┼────────┼─────────┤
+│ aluminio        │      865 │      4 │     5 │        8 │      6 │  97.41% │
+│ carton          │        0 │    723 │     4 │        3 │      0 │  99.04% │
+│ otros           │        4 │      7 │  1139 │       13 │      1 │  97.85% │
+│ plastico        │       12 │      7 │     5 │     1237 │      7 │  97.56% │
+│ vidrio          │        4 │      0 │     3 │       23 │    454 │  93.80% │
+╰─────────────────┴──────────┴────────┴───────┴──────────┴────────┴─────────╯
+
+─────────────────────────────────────────────────  ETAPA FINAL  Comparación de los modelos ─────────────────────────────────────────────────
+Mismas 4534 imágenes, mismo dispositivo y mismo procedimiento para los 5 modelos.
+
+                           Precisión de clasificación en Raspberry Pi 5                           
+╭────────────────────────────┬──────────┬────────────┬─────────────────┬──────────────┬──────────╮
+│ Modelo                     │ Accuracy │    Errores │ Precisión macro │ Recall macro │ F1 macro │
+├────────────────────────────┼──────────┼────────────┼─────────────────┼──────────────┼──────────┤
+│ MobileNetV3-Large          │   96.47% │ 160 / 4534 │          0.9650 │       0.9608 │   0.9627 │
+│ EfficientNetB0             │   96.67% │ 151 / 4534 │          0.9650 │       0.9646 │   0.9648 │
+│ ShuffleNetV2 (ImageNet)    │   94.18% │ 264 / 4534 │          0.9402 │       0.9366 │   0.9381 │
+│ SqueezeNet v1.1 (ImageNet) │   91.75% │ 374 / 4534 │          0.9138 │       0.9097 │   0.9111 │
+│ YOLO11s-cls                │   97.44% │ 116 / 4534 │          0.9744 │       0.9713 │   0.9728 │
+╰────────────────────────────┴──────────┴────────────┴─────────────────┴──────────────┴──────────╯
+
+                                              Rendimiento en Raspberry Pi 5                                               
+╭────────────────────────────┬────────────────┬──────────┬───────────┬───────┬────────────┬─────────┬─────────┬──────────╮
+│ Modelo                     │ Latencia media │      P95 │ Cuadros/s │   CPU │ RAM modelo │  T. máx │ .tflite │ H1       │
+├────────────────────────────┼────────────────┼──────────┼───────────┼───────┼────────────┼─────────┼─────────┼──────────┤
+│ MobileNetV3-Large          │       10.16 ms │ 12.24 ms │      98.4 │ 96.0% │    17.2 MB │ 67.8 °C │ 3.24 MB │ ✔ CUMPLE │
+│ EfficientNetB0             │       29.23 ms │ 30.47 ms │      34.2 │ 96.2% │    34.3 MB │ 69.4 °C │ 4.50 MB │ ✔ CUMPLE │
+│ ShuffleNetV2 (ImageNet)    │        7.06 ms │  7.92 ms │     141.6 │ 97.0% │    12.3 MB │ 67.2 °C │ 1.50 MB │ ✔ CUMPLE │
+│ SqueezeNet v1.1 (ImageNet) │        4.64 ms │  4.74 ms │     215.6 │ 91.3% │    10.9 MB │ 68.8 °C │ 0.81 MB │ ✔ CUMPLE │
+│ YOLO11s-cls                │       12.96 ms │ 13.44 ms │      77.1 │ 92.7% │    21.8 MB │ 69.4 °C │ 5.39 MB │ ✔ CUMPLE │
+╰────────────────────────────┴────────────────┴──────────┴───────────┴───────┴────────────┴─────────┴─────────┴──────────╯
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Latencia media (menos es mejor)                                                                                                          │
+│ MobileNetV3-Large                   █████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  10.16 ms                                         │
+│ EfficientNetB0                      ██████████████████████████████████████████████████  29.23 ms                                         │
+│ ShuffleNetV2 (ImageNet)             ████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   7.06 ms                                         │
+│ SqueezeNet v1.1 (ImageNet)          ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   4.64 ms                                         │
+│ YOLO11s-cls                         ██████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░  12.96 ms                                         │
+│                                                                                                                                          │
+│ Accuracy (más es mejor)                                                                                                                  │
+│ MobileNetV3-Large                   ████████████████████████████████████████████████░░    96.47%                                         │
+│ EfficientNetB0                      ████████████████████████████████████████████████░░    96.67%                                         │
+│ ShuffleNetV2 (ImageNet)             ███████████████████████████████████████████████░░░    94.18%                                         │
+│ SqueezeNet v1.1 (ImageNet)          ██████████████████████████████████████████████░░░░    91.75%                                         │
+│ YOLO11s-cls                         █████████████████████████████████████████████████░    97.44%                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                  Accuracy por clase                                                  
+╭──────────┬───────────────────┬────────────────┬─────────────────────────┬────────────────────────────┬─────────────╮
+│ Clase    │ MobileNetV3-Large │ EfficientNetB0 │ ShuffleNetV2 (ImageNet) │ SqueezeNet v1.1 (ImageNet) │ YOLO11s-cls │
+├──────────┼───────────────────┼────────────────┼─────────────────────────┼────────────────────────────┼─────────────┤
+│ aluminio │            97.86% │         97.52% │                  95.50% │                     93.92% │      97.41% │
+│ carton   │            97.53% │         98.36% │                  97.40% │                     95.62% │      99.04% │
+│ otros    │            97.68% │         97.08% │                  95.27% │                     92.70% │      97.85% │
+│ plastico │            95.58% │         95.98% │                  93.14% │                     91.01% │      97.56% │
+│ vidrio   │            91.74% │         93.39% │                  86.98% │                     81.61% │      93.80% │
+╰──────────┴───────────────────┴────────────────┴─────────────────────────┴────────────────────────────┴─────────────╯
+✔ Mayor precisión : YOLO11s-cls  →  97.44%
+✔ Menor latencia  : SqueezeNet v1.1 (ImageNet)  →  4.64 ms
+✔ Más ligero      : SqueezeNet v1.1 (ImageNet)  →  0.81 MB
+
+✔ Resultados guardados en /home/renova/ecosort_benchmark/resultados_5modelos_4hilos/resultados.json
+✔ Capturas de pantalla en  /home/renova/ecosort_benchmark/resultados_5modelos_4hilos/capturas
+Duración total de la prueba: 21:42 (mm:ss)
+

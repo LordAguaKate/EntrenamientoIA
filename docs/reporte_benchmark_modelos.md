@@ -60,7 +60,7 @@ Fecha de las pruebas: 13 de octubre de 2026.
 
 Estos resultados sirven de referencia. No forman parte de la evidencia gráfica.
 
-### 3.1 Modelos `.keras` en GPU (`tests/comparar_modelos_inferencia.py`)
+### 3.1 Modelos `.keras` en GPU (`pruebas_modelos/local/comparar_modelos_inferencia.py`)
 
 | Modelo | Accuracy | Loss | Errores | F1 macro | Precisión macro | Recall macro | Latencia* |
 |---|---|---|---|---|---|---|---|
@@ -83,7 +83,7 @@ Accuracy por clase (`.keras`, laptop):
 
 El preentrenamiento en ImageNet subió a ShuffleNetV2 de 81.32% a 94.33%, con 70% menos errores.
 
-### 3.2 Modelos `.tflite` en CPU (`tests/benchmark_visual.py` en la laptop)
+### 3.2 Modelos `.tflite` en CPU (`pruebas_modelos/raspberry/benchmark_visual.py` en la laptop)
 
 | Modelo | Accuracy | Errores | F1 macro | Latencia media | P95 | RAM del modelo |
 |---|---|---|---|---|---|---|
@@ -97,7 +97,7 @@ Datos crudos: `reports/benchmark_laptop/resultados_laptop_tflite.json`.
 
 ## 4. Resultados en la Raspberry Pi 5
 
-Corrida oficial: `tests/benchmark_visual.py` con los parámetros por defecto (todas las imágenes, 10 inferencias de calentamiento, 5 minutos de estabilidad por modelo y 60 s de enfriamiento antes de cada modelo). Duró 24 min 11 s, del 13/10/2026 20:44 a las 21:08. Datos crudos: `reports/benchmark_rpi/resultados_rpi_1hilo.json`; registro de la terminal: `reports/benchmark_rpi/log_rpi_1hilo.txt`.
+Corrida oficial: `pruebas_modelos/raspberry/benchmark_visual.py` con los parámetros por defecto (todas las imágenes, 10 inferencias de calentamiento, 5 minutos de estabilidad por modelo y 60 s de enfriamiento antes de cada modelo). Duró 24 min 11 s, del 13/10/2026 20:44 a las 21:08. Datos crudos: `reports/benchmark_rpi/resultados_rpi_1hilo.json`; registro de la terminal: `reports/benchmark_rpi/log_rpi_1hilo.txt`.
 
 ### 4.1 Precisión de clasificación
 
@@ -338,11 +338,11 @@ scp rasp:ecosort_benchmark/resultados_<fecha>/resultados.json reports/benchmark_
 scp -r rasp:ecosort_benchmark/resultados_<fecha>/capturas/ reports/benchmark_rpi/capturas_svg/
 
 # Generar gráficas y convertir capturas a PNG (requiere rsvg-convert)
-python tests/graficar_benchmark_rpi.py
+python pruebas_modelos/reportes/graficar_benchmark_rpi.py
 ```
 
 Scripts:
 
-- `tests/benchmark_visual.py`: benchmark visual de los tres modelos. Es la versión ampliada del script original, que solo probaba MobileNetV3. La copia original quedó en la Raspberry como `benchmark_visual_v1_solo_mobilenet.py.bak`.
-- `tests/graficar_benchmark_rpi.py`: genera las gráficas y convierte las capturas.
-- `tests/comparar_modelos_inferencia.py`: evaluación de los `.keras` en la laptop (sección 3.1).
+- `pruebas_modelos/raspberry/benchmark_visual.py`: benchmark visual de los tres modelos. Es la versión ampliada del script original, que solo probaba MobileNetV3. La copia original quedó en la Raspberry como `benchmark_visual_v1_solo_mobilenet.py.bak`.
+- `pruebas_modelos/reportes/graficar_benchmark_rpi.py`: genera las gráficas y convierte las capturas.
+- `pruebas_modelos/local/comparar_modelos_inferencia.py`: evaluación de los `.keras` en la laptop (sección 3.1).

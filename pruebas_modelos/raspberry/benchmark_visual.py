@@ -3,12 +3,12 @@
 EcoSort - benchmark visual comparativo en Raspberry Pi (probado en la Pi 5 y la Pi 4).
 
 Corre, uno tras otro, los modelos .tflite del proyecto (MobileNetV3-Large,
-EfficientNetB0 y ShuffleNetV2 con pesos de ImageNet) sobre el mismo conjunto
-de imágenes y muestra todo el proceso en la terminal, pensado para grabarse en
-video o capturarse como evidencia:
+EfficientNetB0, ShuffleNetV2 y SqueezeNet v1.1 con pesos de ImageNet, y
+YOLO11s-cls) sobre el mismo conjunto de imágenes y muestra todo el proceso en
+la terminal, pensado para grabarse en video o capturarse como evidencia:
 
     Etapa 1  Sistema y modelos      ficha del dispositivo y de cada .tflite
-    Etapa 2  Carga de imágenes      mismo preprocesamiento que en el entrenamiento
+    Etapa 2  Carga de imágenes      cada modelo recibe el preprocesamiento con el que se entrenó
     Por cada modelo:
         a) Latencia y precisión     una inferencia cronometrada por imagen
         b) Estabilidad              inferencia continua midiendo CPU, RAM y temperatura
@@ -26,7 +26,7 @@ Para una demostración rápida (video):
 
 Salida (carpeta resultados_<fecha>/):
     resultados.json     todas las cifras y las series de tiempo, para graficar
-                        con tests/graficar_benchmark_rpi.py
+                        con pruebas_modelos/reportes/graficar_benchmark_rpi.py
     capturas/*.svg      capturas de cada pantalla del proceso
 
 Requiere: numpy, pillow, psutil, rich y un runtime de TFLite
@@ -35,6 +35,7 @@ Requiere: numpy, pillow, psutil, rich y un runtime de TFLite
 
 import argparse
 import gc
+import hashlib
 import io
 import json
 import platform
@@ -62,14 +63,35 @@ except ImportError:
         RUNTIME = "tensorflow.lite"
 
 # Modelos a comparar. El orden es el orden en que se ejecutan.
+#   layout            orden de los ejes de la entrada: NHWC (Keras) o NCHW (PyTorch/Ultralytics)
+#   escala            factor por el que se multiplican los pixeles 0-255 antes de entrar al modelo
+#   preprocesamiento  clave de PREPROCESAMIENTOS: el mismo que se usó al entrenar cada modelo
 MODELOS = [
     {"clave": "mobilenet", "nombre": "MobileNetV3-Large",
-     "archivo": "modelo_residuos_rpi_V3_05.tflite", "color": "dodger_blue1"},
+     "archivo": "modelo_residuos_rpi_V3_05.tflite", "color": "dodger_blue1",
+     "layout": "NHWC", "escala": 1.0, "preprocesamiento": "estirar"},
     {"clave": "efficientnet", "nombre": "EfficientNetB0",
-     "archivo": "modelo_residuos_EfficientNetB0_v1.tflite", "color": "dark_orange"},
+     "archivo": "modelo_residuos_EfficientNetB0_v1.tflite", "color": "dark_orange",
+     "layout": "NHWC", "escala": 1.0, "preprocesamiento": "estirar"},
     {"clave": "shufflenet", "nombre": "ShuffleNetV2 (ImageNet)",
-     "archivo": "modelo_residuos_shufflenetV2_imagenet.tflite", "color": "spring_green3"},
+     "archivo": "modelo_residuos_shufflenetV2_imagenet.tflite", "color": "spring_green3",
+     "layout": "NHWC", "escala": 1.0, "preprocesamiento": "estirar"},
+    {"clave": "squeezenet", "nombre": "SqueezeNet v1.1 (ImageNet)",
+     "archivo": "modelo_residuos_SqueezeNet_imagenet.tflite", "color": "gold1",
+     "layout": "NHWC", "escala": 1.0, "preprocesamiento": "estirar"},
+    {"clave": "yolo", "nombre": "YOLO11s-cls",
+     "archivo": "modelo_residuos_YOLO_v1.tflite", "color": "hot_pink",
+     "layout": "NCHW", "escala": 1 / 255, "preprocesamiento": "recorte_central"},
 ]
+
+# Preprocesamientos de entrenamiento. Se carga un juego de imágenes por cada uno que se use.
+PREPROCESAMIENTOS = {
+    # ImageDataGenerator.flow_from_directory de los notebooks de Keras: estirar a la entrada sin
+    # conservar la proporción (interpolación de --interpolacion, 'nearest' por defecto)
+    "estirar": "RGB, estirado a {h}x{w} ('{interp}')",
+    # classify_transforms de Ultralytics: lado corto a la entrada (bilineal) y recorte central
+    "recorte_central": "RGB, lado corto a {h} ('bilinear') y recorte central de {h}x{w}",
+}
 
 CLASES = ["aluminio", "carton", "otros", "plastico", "vidrio"]
 COLOR_CLASE = {"aluminio": "cyan", "carton": "yellow", "otros": "magenta", "plastico": "blue", "vidrio": "green"}
@@ -275,31 +297,67 @@ def listar_imagenes(images_dir, max_imagenes):
     return rutas
 
 
-def cargar_imagenes(rutas, images_dir, input_size, interpolacion):
-    """Decodifica y redimensiona las imágenes y las deja en memoria como uint8.
+def estirar(img, input_size, filtro):
+    return img.convert("RGB").resize((input_size[1], input_size[0]), filtro)
 
-    Se usa el mismo preprocesamiento que ImageDataGenerator.flow_from_directory
-    en los notebooks: conversión a RGB y redimensionado con interpolación
-    'nearest'. Los tres modelos traen su normalización integrada, así que
-    reciben los pixeles en el rango 0-255.
+
+def recorte_central(img, input_size):
+    """Igual que classify_transforms de Ultralytics: lado corto a la entrada (bilineal) y recorte central."""
+    alto, ancho = input_size
+    img = img.convert("RGB")
+    w, h = img.size
+    e = min(alto, ancho) / min(w, h)
+    img = img.resize((max(ancho, round(w * e)), max(alto, round(h * e))), Image.BILINEAR)
+    w, h = img.size
+    izq, sup = (w - ancho) // 2, (h - alto) // 2
+    return img.crop((izq, sup, izq + ancho, sup + alto))
+
+
+def cargar_imagenes(rutas, images_dir, input_size, preprocesamiento, interpolacion):
+    """Decodifica y redimensiona las imágenes y las deja en memoria como uint8 (alto, ancho, 3).
+
+    'estirar' es el preprocesamiento de ImageDataGenerator.flow_from_directory
+    en los notebooks de Keras (conversión a RGB y redimensionado con
+    interpolación 'nearest'); 'recorte_central' es el de Ultralytics para YOLO.
+    La escala y el orden de los ejes de cada modelo se aplican al inferir.
     """
     filtro = {"nearest": Image.NEAREST, "bilinear": Image.BILINEAR, "bicubic": Image.BICUBIC}[interpolacion]
     items = []
     with Progress(SpinnerColumn(), TextColumn("[bold]{task.description}"), BarColumn(bar_width=40),
                   MofNCompleteColumn(), TimeElapsedColumn(), console=console) as prog:
-        tarea = prog.add_task("Cargando y preprocesando imágenes", total=len(rutas))
+        tarea = prog.add_task(f"Cargando imágenes · {preprocesamiento}", total=len(rutas))
         for r in rutas:
             with Image.open(r) as img:
-                arr = np.asarray(img.convert("RGB").resize((input_size[1], input_size[0]), filtro), dtype=np.uint8)
+                img = estirar(img, input_size, filtro) if preprocesamiento == "estirar" else recorte_central(img, input_size)
+                arr = np.asarray(img, dtype=np.uint8)
             real = r.parent.name if r.parent.name in CLASES else None
             items.append({"arr": arr, "nombre": r.name, "ruta": str(r.relative_to(images_dir)), "real": real})
             prog.advance(tarea)
     return items
 
 
-def inferir(interpreter, idet, odet, arr):
+def tam_entrada(cfg, shape):
+    """(alto, ancho) de la entrada según el orden de los ejes del modelo."""
+    return (int(shape[2]), int(shape[3])) if cfg["layout"] == "NCHW" else (int(shape[1]), int(shape[2]))
+
+
+def sha256(ruta):
+    h = hashlib.sha256()
+    with open(ruta, "rb") as f:
+        for bloque in iter(lambda: f.read(2**20), b""):
+            h.update(bloque)
+    return h.hexdigest()
+
+
+def inferir(interpreter, idet, odet, arr, cfg):
     """Cronometra set_tensor + invoke + get_tensor de una imagen ya preprocesada."""
-    entrada = arr[None].astype(idet["dtype"])  # la conversión de tipo queda fuera del cronómetro
+    # La conversión de tipo, la escala y la transposición quedan fuera del cronómetro
+    entrada = arr.astype(idet["dtype"])
+    if cfg["escala"] != 1.0:
+        entrada *= np.asarray(cfg["escala"], dtype=entrada.dtype)
+    if cfg["layout"] == "NCHW":
+        entrada = entrada.transpose(2, 0, 1)
+    entrada = np.ascontiguousarray(entrada[None])
     t0 = time.perf_counter()
     interpreter.set_tensor(idet["index"], entrada)
     interpreter.invoke()
@@ -449,7 +507,8 @@ def render_estabilidad(e):
     return Panel(Group(tiempo, Text(), cuerpo), title=f"Ejecución continua · {e['modelo']}", border_style=e["color"], box=box.ROUNDED)
 
 
-def prueba_estabilidad(interpreter, idet, odet, items, dur, intervalo, modelo, color):
+def prueba_estabilidad(interpreter, idet, odet, items, cfg, dur, intervalo):
+    modelo, color = cfg["nombre"], cfg["color"]
     proceso = psutil.Process()
     e = {"modelo": modelo, "color": color, "dur": dur, "t": 0.0, "n": 0, "tiempos": [], "ips": [], "cpu": [],
          "cores": [0.0] * psutil.cpu_count(), "ram": [], "ram_sis": 0.0, "lat": [], "temp": [], "freq": [], "thr": throttled()}
@@ -464,7 +523,7 @@ def prueba_estabilidad(interpreter, idet, odet, items, dur, intervalo, modelo, c
             e["t"] = ahora - t0
             if e["t"] >= dur:
                 break
-            _, ms = inferir(interpreter, idet, odet, items[idx % len(items)]["arr"])
+            _, ms = inferir(interpreter, idet, odet, items[idx % len(items)]["arr"], cfg)
             idx += 1
             e["n"] += 1
             acc.append(ms)
@@ -563,7 +622,7 @@ def probar_modelo(k, n_modelos, cfg, ruta, items, args):
     with Live(get_renderable=lambda: render_latencia(e3), console=console, auto_refresh=False) as live:
         ult_render = 0.0
         for i, it in enumerate(items):
-            salida, ms = inferir(interpreter, idet, odet, it["arr"])
+            salida, ms = inferir(interpreter, idet, odet, it["arr"], cfg)
             pred = CLASES[int(np.argmax(salida))]
             cal = i < args.n_warmup
             if not cal:
@@ -586,7 +645,7 @@ def probar_modelo(k, n_modelos, cfg, ruta, items, args):
     etapa(f"{etiqueta} · b", f"{nombre} — estabilidad",
           f"Inferencia continua durante {fmt_tiempo(args.duracion_estabilidad)} (mm:ss) muestreando CPU, RAM, "
           f"temperatura y latencia cada {args.intervalo_muestreo:g} s.", color)
-    e4 = prueba_estabilidad(interpreter, idet, odet, items, args.duracion_estabilidad, args.intervalo_muestreo, nombre, color)
+    e4 = prueba_estabilidad(interpreter, idet, odet, items, cfg, args.duracion_estabilidad, args.intervalo_muestreo)
     capturar(f"{k}b_estabilidad_{cfg['clave']}", render_estabilidad(e4), f"{nombre} · prueba de estabilidad")
 
     res_lat = resumen(e3["lat"])
@@ -632,8 +691,10 @@ def probar_modelo(k, n_modelos, cfg, ruta, items, args):
     del interpreter
     gc.collect()
     return {
-        "clave": cfg["clave"], "nombre": nombre, "archivo": ruta.name,
+        "clave": cfg["clave"], "nombre": nombre, "archivo": ruta.name, "sha256": sha256(ruta),
         "tam_tflite_mb": round(ruta.stat().st_size / 2**20, 3),
+        "layout": cfg["layout"], "escala": cfg["escala"], "preprocesamiento": cfg["preprocesamiento"],
+        "interpolacion": args.interpolacion if cfg["preprocesamiento"] == "estirar" else "bilinear",
         "carga_ms": round(carga_ms, 1),
         "entrada": f"{idet['shape'].tolist()} {np.dtype(idet['dtype']).name}",
         "salida": f"{odet['shape'].tolist()} {np.dtype(odet['dtype']).name}",
@@ -738,18 +799,35 @@ def comparacion_final(resultados):
     console.print(f"[green]✔[/] Más ligero      : [bold]{ligero['nombre']}[/]  →  {ligero['tam_tflite_mb']:.2f} MB")
 
 
+def buscar_modelo(models_dir, archivo):
+    """El .tflite directo en models_dir (Raspberry) o en alguna subcarpeta (models/<Arquitectura>/ en el repo)."""
+    ruta = models_dir / archivo
+    if ruta.exists():
+        return ruta
+    encontrados = sorted(models_dir.rglob(archivo))
+    if not encontrados:
+        raise SystemExit(f"No se encontró el modelo {archivo} en {models_dir}")
+    return encontrados[0]
+
+
+def resumen_pre(cfg):
+    """Preprocesamiento de un modelo en pocas palabras, para la tabla de la etapa 1."""
+    rango = "0-255" if cfg["escala"] == 1.0 else f"0-{255 * cfg['escala']:g}"
+    return f"{cfg['preprocesamiento'].replace('_', ' ')} · {rango}"
+
+
 def main():
     global DIR_CAPTURAS
     aqui = Path(__file__).resolve().parent
-    # En la Raspberry los modelos van junto al script (modelos/); en el repo, en models/
-    dir_modelos = aqui / "modelos" if (aqui / "modelos").is_dir() else aqui.parent / "models"
-    dir_imagenes = aqui / "test_set" if (aqui / "test_set").is_dir() else aqui.parent / "data" / "raw" / "waste_classification" / "test"
+    # En la Raspberry los modelos van junto al script (modelos/); en el repo, en models/<Arquitectura>/
+    dir_modelos = aqui / "modelos" if (aqui / "modelos").is_dir() else aqui.parents[2] / "models"
+    dir_imagenes = aqui / "test_set" if (aqui / "test_set").is_dir() else aqui.parents[2] / "data" / "raw" / "waste_classification" / "test"
 
     ap = argparse.ArgumentParser(description="Benchmark visual comparativo de los modelos .tflite en Raspberry Pi")
     ap.add_argument("--models-dir", type=Path, default=dir_modelos)
     ap.add_argument("--images-dir", type=Path, default=dir_imagenes, help="Carpeta con una subcarpeta por clase")
     ap.add_argument("--modelos", nargs="+", choices=[m["clave"] for m in MODELOS], default=[m["clave"] for m in MODELOS],
-                    help="Modelos a probar (default: los tres)")
+                    help="Modelos a probar (default: todos)")
     ap.add_argument("--max-imagenes", type=int, default=0, help="0 = todas las imágenes de la carpeta (default)")
     ap.add_argument("--n-warmup", type=int, default=10)
     ap.add_argument("--duracion-estabilidad", type=int, default=300, help="Segundos de inferencia continua por modelo")
@@ -757,7 +835,8 @@ def main():
     ap.add_argument("--enfriamiento", type=float, default=60.0, help="Segundos de pausa antes de probar cada modelo")
     ap.add_argument("--num-threads", type=int, default=None, help="Hilos del intérprete (default: el del runtime)")
     ap.add_argument("--interpolacion", choices=["nearest", "bilinear", "bicubic"], default="nearest",
-                    help="Redimensionado de las imágenes (default: nearest, igual que en los notebooks)")
+                    help="Redimensionado de los modelos que estiran la imagen (default: nearest, igual que en los "
+                         "notebooks de Keras). YOLO siempre usa el recorte central bilineal de Ultralytics")
     ap.add_argument("--pausa-visual", type=float, default=0.0,
                     help="pausa entre inferencias para que se lea en video; la CPU baja de frecuencia y la latencia "
                          "medida sube (usar 0 para cifras oficiales)")
@@ -773,9 +852,7 @@ def main():
         DIR_CAPTURAS.mkdir(exist_ok=True)
 
     seleccion = [m for m in MODELOS if m["clave"] in args.modelos]
-    for m in seleccion:
-        if not (args.models_dir / m["archivo"]).exists():
-            raise SystemExit(f"No se encontró el modelo {args.models_dir / m['archivo']}")
+    rutas_modelos = {m["clave"]: buscar_modelo(args.models_dir, m["archivo"]) for m in seleccion}
     placa, so = info_sistema()
 
     console.clear()
@@ -798,21 +875,22 @@ def main():
                  ("Núcleos", str(psutil.cpu_count())), ("Runtime", RUNTIME),
                  ("Hilos de inferencia", str(args.num_threads) if args.num_threads else "valor por defecto del runtime"),
                  ("Temperatura inicial", f"{temp0:.1f} °C" if temp0 is not None else "n/d"),
-                 ("Preprocesamiento", f"RGB, redimensionado '{args.interpolacion}', float32 en rango 0-255 (normalización dentro del modelo)"),
+                 ("Preprocesamiento", "el de entrenamiento de cada modelo (ver la tabla); la normalización va dentro del modelo"),
                  ("Inicio", f"{inicio:%Y-%m-%d %H:%M:%S}")):
         ficha.add_row(k, Text(v))
 
     tabla_modelos = Table(title="Modelos a evaluar", box=box.ROUNDED, title_style="bold", header_style="bold")
     for col, just in (("#", "right"), ("Modelo", "left"), ("Archivo", "left"), ("Tamaño", "right"), ("Entrada", "left"),
-                      ("Salida", "left"), ("RAM del modelo", "right")):
+                      ("Preprocesamiento", "left"), ("RAM del modelo", "right")):
         tabla_modelos.add_column(col, justify=just)
-    ram_aislada, input_size = {}, None
+    ram_aislada, input_size, salidas = {}, None, []
     with console.status("Inspeccionando modelos…"):
         for i, m in enumerate(seleccion, 1):
-            ruta = args.models_dir / m["archivo"]
+            ruta = rutas_modelos[m["clave"]]
             interp = tflite.Interpreter(model_path=str(ruta))
             idet, odet = interp.get_input_details()[0], interp.get_output_details()[0]
-            tam = (int(idet["shape"][1]), int(idet["shape"][2]))
+            tam = tam_entrada(m, idet["shape"])
+            salidas.append(f"{odet['shape'].tolist()} {np.dtype(odet['dtype']).name}")
             if input_size and tam != input_size:
                 raise SystemExit("Los modelos no comparten el mismo tamaño de entrada")
             input_size = tam
@@ -822,9 +900,12 @@ def main():
             tabla_modelos.add_row(str(i), Text(m["nombre"], style=f"bold {m['color']}"), m["archivo"],
                                   f"{ruta.stat().st_size / 2**20:.2f} MB",
                                   f"{idet['shape'].tolist()} {np.dtype(idet['dtype']).name}",
-                                  f"{odet['shape'].tolist()} {np.dtype(odet['dtype']).name}",
+                                  resumen_pre(m),
                                   f"{ram['incremento_modelo_mb']:.1f} MB" if ram else "n/d")
-    mostrar(Group(Panel(ficha, title="Ficha del entorno", border_style="green", box=box.ROUNDED), tabla_modelos),
+    salidas = sorted(set(salidas))
+    nota = Text(f"Salida de {'todos los modelos' if len(salidas) == 1 else 'los modelos'}: {', '.join(salidas)} "
+                "(softmax sobre las 5 clases)", style="dim")
+    mostrar(Group(Panel(ficha, title="Ficha del entorno", border_style="green", box=box.ROUNDED), tabla_modelos, nota),
             captura="0a_sistema_y_modelos", titulo="Etapa 1 · sistema y modelos")
     if thr0 is not None:
         console.print(("[green]✔[/] Energía correcta al iniciar" if not thr0 & MASCARA_THROTTLING
@@ -835,12 +916,23 @@ def main():
 
     # ---------------- Etapa 2 ----------------
     rutas = listar_imagenes(args.images_dir, args.max_imagenes)
+    usados = list(dict.fromkeys(m["preprocesamiento"] for m in seleccion))
     etapa("ETAPA 2", "Carga de imágenes de prueba",
-          f"Se toman {len(rutas)} imágenes alternando entre clases, se redimensionan a {input_size[0]}x{input_size[1]} "
-          "y se dejan en memoria. Los tres modelos reciben exactamente las mismas imágenes.")
-    t0 = time.perf_counter()
-    items = cargar_imagenes(rutas, args.images_dir, input_size, args.interpolacion)
-    carga_img_s = time.perf_counter() - t0
+          f"Se toman {len(rutas)} imágenes alternando entre clases, se llevan a {input_size[0]}x{input_size[1]} con el "
+          "preprocesamiento de entrenamiento de cada modelo y se dejan en memoria. Todos los modelos evalúan exactamente "
+          f"las mismas imágenes; se carga un juego por preprocesamiento ({len(usados)}).")
+    juegos, carga_juegos = {}, {}
+    for pre in usados:
+        t0 = time.perf_counter()
+        juegos[pre] = cargar_imagenes(rutas, args.images_dir, input_size, pre, args.interpolacion)
+        seg = time.perf_counter() - t0
+        quienes = [m["nombre"] for m in seleccion if m["preprocesamiento"] == pre]
+        carga_juegos[pre] = {"descripcion": PREPROCESAMIENTOS[pre].format(h=input_size[0], w=input_size[1], interp=args.interpolacion),
+                             "modelos": quienes, "carga_s": round(seg, 2), "ms_por_imagen": round(1000 * seg / len(rutas), 2)}
+        console.print(f"[green]✔[/] Juego '{pre}' ({', '.join(quienes)}): {len(rutas)} imágenes preprocesadas en "
+                      f"[bold]{seg:.1f} s[/] ({1000 * seg / len(rutas):.1f} ms por imagen)")
+    items = juegos[usados[0]]
+    carga_img_s = sum(j["carga_s"] for j in carga_juegos.values())
     dist = Table(title="Imágenes por clase", box=box.SIMPLE_HEAD, title_style="bold")
     dist.add_column("Clase")
     dist.add_column("Imágenes", justify="right")
@@ -850,13 +942,11 @@ def main():
         dist.add_row(Text(c, style=COLOR_CLASE[c]), str(por_clase[c]), barra_valor(por_clase[c], max(por_clase.values()) or 1, COLOR_CLASE[c], 40))
     dist.add_row(Text("Total", style="bold"), Text(str(len(items)), style="bold"), "")
     mostrar(dist, captura="0b_imagenes_de_prueba", titulo="Etapa 2 · imágenes de prueba")
-    console.print(f"[green]✔[/] {len(items)} imágenes preprocesadas en [bold]{carga_img_s:.1f} s[/] "
-                  f"({1000 * carga_img_s / len(items):.1f} ms por imagen)")
 
     # ---------------- Modelos ----------------
     resultados = []
     for k, m in enumerate(seleccion, 1):
-        r = probar_modelo(k, len(seleccion), m, args.models_dir / m["archivo"], items, args)
+        r = probar_modelo(k, len(seleccion), m, rutas_modelos[m["clave"]], juegos[m["preprocesamiento"]], args)
         r["ram_aislada"] = ram_aislada[m["clave"]]
         resultados.append(r)
 
@@ -879,9 +969,10 @@ def main():
                        "enfriamiento_s": args.enfriamiento, "num_threads": args.num_threads,
                        "interpolacion": args.interpolacion, "pausa_visual_s": args.pausa_visual,
                        "umbral_h1_ms": UMBRAL_H1_MS},
-        "preprocesamiento": f"RGB, resize {input_size[0]}x{input_size[1]} '{args.interpolacion}', float32 0-255 (normalización dentro del modelo)",
+        "preprocesamiento": carga_juegos,
         "clases": CLASES,
         "imagenes": {"total": len(items), "por_clase": por_clase, "carga_s": round(carga_img_s, 2),
+                     "carga_por_preprocesamiento": {k: v["carga_s"] for k, v in carga_juegos.items()},
                      "ruta": [it["ruta"] for it in items], "real": [it["real"] for it in items]},
         "modelos": resultados,
     }
