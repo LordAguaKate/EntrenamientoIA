@@ -819,8 +819,8 @@ def resumen_pre(cfg):
 def main():
     global DIR_CAPTURAS
     aqui = Path(__file__).resolve().parent
-    # En la Raspberry los modelos van junto al script (modelos/); en el repo, en models/<Arquitectura>/
-    dir_modelos = aqui / "modelos" if (aqui / "modelos").is_dir() else aqui.parents[2] / "models"
+    # En la Raspberry los modelos van junto al script (modelos/); en el repo, en pruebas_modelos/modelos/<Arquitectura>/
+    dir_modelos = aqui / "modelos" if (aqui / "modelos").is_dir() else aqui.parent / "modelos"
     dir_imagenes = aqui / "test_set" if (aqui / "test_set").is_dir() else aqui.parents[2] / "data" / "raw" / "waste_classification" / "test"
 
     ap = argparse.ArgumentParser(description="Benchmark visual comparativo de los modelos .tflite en Raspberry Pi")

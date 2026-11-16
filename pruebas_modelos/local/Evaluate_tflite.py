@@ -21,7 +21,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 # Asume que este archivo vive en pruebas_modelos/local/ (dos niveles bajo la raíz).
 # Si lo colocas en otro lugar, ajusta BASE_DIR manualmente.
 BASE_DIR = Path(__file__).resolve().parents[2]
-MODELS_DIR = BASE_DIR / "models"
+MODELS_DIR = Path(__file__).resolve().parents[1] / "modelos"  # pruebas_modelos/modelos/
 DATA_DIR = BASE_DIR / "data" / "raw" / "waste_classification" / "test"
 
 TFLITE_MODEL_PATH = MODELS_DIR / "MobileNetV3" / "modelo_residuos_rpi_V3_05.tflite"

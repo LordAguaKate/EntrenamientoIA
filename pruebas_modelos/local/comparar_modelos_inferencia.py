@@ -45,7 +45,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Asume que este archivo vive en pruebas_modelos/local/ (dos niveles bajo la raíz).
 BASE_DIR = Path(__file__).resolve().parents[2]
-MODELS_DIR = BASE_DIR / "models"
+MODELS_DIR = Path(__file__).resolve().parents[1] / "modelos"  # pruebas_modelos/modelos/
 DATA_DIR = BASE_DIR / "data" / "raw" / "waste_classification" / "test"
 
 IMG_SIZE = (224, 224)

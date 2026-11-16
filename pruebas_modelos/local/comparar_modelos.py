@@ -41,7 +41,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parents[2]
 NOTEBOOKS_DIR = BASE_DIR / "notebooks"
-MODELS_DIR = BASE_DIR / "models"
+MODELS_DIR = Path(__file__).resolve().parents[1] / "modelos"  # pruebas_modelos/modelos/
 
 # Cada entrada vincula el nombre del modelo con su notebook de evaluación
 # y el nombre del archivo .keras para leer su tamaño en disco.

@@ -3,6 +3,20 @@
 Scripts con los que se probaron los modelos entrenados, separados según dónde se ejecutan.
 Todos se corren desde la raíz del repositorio.
 
+## `modelos/` — copia de los modelos probados
+
+Los scripts toman los modelos de esta carpeta, no de `models/`. El conjunto de prueba sí se lee de
+`data/raw/waste_classification/test`.
+
+| Modelo | Archivos |
+|---|---|
+| MobileNetV3-Large | `MobileNetV3/modelo_residuos_rpi_V3_05.tflite` y `.keras` |
+| EfficientNetB0 | `EfficientNetB0/modelo_residuos_EfficientNetB0_v1.tflite` y `.keras` |
+| ShuffleNetV2 (ImageNet) | `ShuffleNetV2/modelo_residuos_shufflenetV2_imagenet.tflite` y `.keras` |
+| SqueezeNet v1.1 (ImageNet) | `SqueezeNet/modelo_residuos_SqueezeNet_imagenet.tflite` y `.keras` |
+| YOLO11s-cls | `YOLO/modelo_residuos_YOLO_v1.tflite` y `.pt` |
+| MobileNetV2 (cámara) | `MobileNetV2/modelo_residuos_rpi.tflite` |
+
 ## `raspberry/` — se ejecutan en la Raspberry Pi
 
 | Script | Qué hace |
